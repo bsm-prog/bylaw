@@ -69,14 +69,19 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
     setShowTemplates(false)
   }
 
+  const hasRefs = data.selectedRefs && data.selectedRefs.length > 0
+
   const handleAiGenerate = async () => {
     setAiGenerating(true)
     try {
+      const refInfo = hasRefs
+        ? '참고 조례: ' + data.selectedRefs.map(r => r.name).join(', ')
+        : ''
       const result = await generateArticleDraft(
         data.keywords || [],
         data.title,
         data.type,
-        data.reportSummary || ''
+        (data.reportSummary || '') + '\n' + refInfo
       )
       if (result && result.articles) {
         const newArticles = result.articles.map((a, i) => mkArticle(i + 1, a.title, a.paragraphs?.[0]?.content || ''))
@@ -84,7 +89,6 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
       }
     } catch (err) {
       console.warn('AI 조문 생성 실패, 기본 템플릿 사용:', err.message)
-      // AI 실패 시 키워드 기반 기본 조문 자동 생성
       const topic = data.title || (data.keywords || []).join(' ') || '○○'
       const fallbackArticles = [
         mkArticle(1, '목적', '이 조례는 ' + topic + '에 필요한 사항을 규정함으로써 도민의 삶의 질 향상에 이바지함을 목적으로 한다.'),
@@ -227,7 +231,10 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
           {aiGenerating ? 'AI 생성 중...' : 'AI 조문 초안 생성'}
         </button>
         <p className="form-note">
-          키워드와 사전조사 리포트를 바탕으로 조문 초안을 자동 생성합니다. 생성 후 자유롭게 수정 가능합니다.
+          {hasRefs
+            ? '참고 조례 ' + data.selectedRefs.length + '건이 선택되었습니다. AI가 참고하여 조문을 생성합니다.'
+            : '키워드와 사전조사 리포트를 바탕으로 조문 초안을 자동 생성합니다.'
+          }
         </p>
       </div>
 

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 
-내보내기 기본 함수 Phase2Report({ searchData, onNext, onBack, selectedRefs, onSelectRefs }) {
-  const [로딩, setLoading] = useState(false)
+export default function Phase2Report({ searchData, onNext, onBack, selectedRefs, onSelectRefs }) {
+  const [loading, setLoading] = useState(false)
   const [report, setReport] = useState(null)
   const [sections, setSections] = useState({ local: true, upper: true, other: true })
 
   useEffect(() => {
-    검색 데이터가 있고 보고서가 아닌 경우 {
+    if (searchData && !report) {
       generateReport()
     }
   }, [searchData])
@@ -14,8 +14,8 @@ import { useState, useEffect } from 'react'
   const generateReport = async () => {
     setLoading(true)
 
-    // TODO: 실제 Claude API 캐스팅 (Cloudflare Worker 경유)
-    // 현재는 검색 결과 기반으로 구조화된 보고서 작성을 생성했습니다.
+    // TODO: 실제 Claude API 연동 (Cloudflare Worker 프록시 경유)
+    // 현재는 검색 결과 기반으로 구조화된 리포트 틀을 생성
     setTimeout(() => {
       const r = buildReportFromSearchData(searchData)
       setReport(r)
@@ -27,42 +27,42 @@ import { useState, useEffect } from 'react'
     setSections(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  로딩 중이면 {
-    반품 (
+  if (loading) {
+    return (
       <div className="report-loading">
-        <h3 className="report-loading-title">AI 보고서 생성 중</h3>
-        <div className="보고서 로딩 단계">
+        <h3 className="report-loading-title">AI 분석 리포트 생성 중</h3>
+        <div className="report-loading-steps">
           <LoadingStep done label="경기도 기존 조례 분석" />
-          <LoadingStep done label="상위법령 조 관련문 분석" />
-          <LoadingStep label="타시험 조례 분석 중..." />
+          <LoadingStep done label="상위법령 관련 조문 분석" />
+          <LoadingStep label="타 시도 조례 비교 분석 중..." />
         </div>
       </div>
     )
   }
 
-  만약 (!report)이면 null을 반환합니다.
+  if (!report) return null
 
-  반품 (
+  return (
     <div className="phase2">
-      {/* 보고서 헤더 */}
-      <div className="보고서 헤더">
+      {/* 리포트 헤더 */}
+      <div className="report-header">
         <div className="report-header-left">
-          <h2 className="report-title">AI 분석 보고서</h2>
+          <h2 className="report-title">AI 분석 리포트</h2>
           <p className="report-meta">
-            검색 키워드: {report.keywords.join(' + ')} | 분석 기간: {formatTimestamp(report.timestamp)}
+            검색 키워드: {report.keywords.join(' + ')} | 분석 일시: {formatTimestamp(report.timestamp)}
           </p>
         </div>
         <div className="report-header-actions">
           <button className="btn btn-text" onClick={onBack}>
             다시 검색
-          </버튼>
+          </button>
         </div>
       </div>
 
-      {/* 비교의견 */}
-      <div className="보고서 요약">
+      {/* 종합의견 */}
+      <div className="report-summary">
         <h3 className="report-section-title-main">종합의견</h3>
-        <div className="보고서 요약 본문">
+        <div className="report-summary-body">
           {report.summary.map((paragraph, i) => (
             <p key={i}>{paragraph}</p>
           ))}
@@ -70,17 +70,17 @@ import { useState, useEffect } from 'react'
       </div>
 
       {/* 경기도 기존 조례 분석 */}
-      <div className="보고서 섹션">
+      <div className="report-section">
         <button className="report-section-header" onClick={() => toggleSection('local')}>
           <h3 className="report-section-title">경기도 기존 조례 분석</h3>
-          <span className="report-section-toggle">{sections.local ? '접기' : '건너뛰기'}</span>
-        </버튼>
+          <span className="report-section-toggle">{sections.local ? '접기' : '펼치기'}</span>
+        </button>
         {sections.local && (
-          <div className="보고서 섹션 본문">
+          <div className="report-section-body">
             <p className="report-section-comment">{report.localComment}</p>
             {report.localItems.length > 0 ? (
-              <테이블 className="보고서 테이블">
-                <제목>
+              <table className="report-table">
+                <thead>
                   <tr>
                     <th>조례명</th>
                     <th style={{width:80}}>관련성</th>
@@ -100,26 +100,26 @@ import { useState, useEffect } from 'react'
                     </tr>
                   ))}
                 </tbody>
-              </테이블>
+              </table>
             ) : (
-              <p className="report-empty">해당 키워드와 관련 경기도 조례가 없습니다.</p>
+              <p className="report-empty">해당 키워드와 관련된 경기도 조례가 없습니다.</p>
             )}
           </div>
         )}
       </div>
 
       {/* 상위법령 분석 */}
-      <div className="보고서 섹션">
-        <button className="보고서 섹션 헤더" onClick={() => toggleSection('upper')}>
+      <div className="report-section">
+        <button className="report-section-header" onClick={() => toggleSection('upper')}>
           <h3 className="report-section-title">상위법령 분석</h3>
-          <span className="report-section-toggle">{sections.upper ? '접기' : '건너뛰기'}</span>
-        </버튼>
-        {섹션 상단 && (
-          <div className="보고서 섹션 본문">
-            <p className="보고서 섹션 댓글">{보고서.상단 댓글}</p>
+          <span className="report-section-toggle">{sections.upper ? '접기' : '펼치기'}</span>
+        </button>
+        {sections.upper && (
+          <div className="report-section-body">
+            <p className="report-section-comment">{report.upperComment}</p>
             {report.upperItems.length > 0 ? (
-              <테이블 className="보고서 테이블">
-                <제목>
+              <table className="report-table">
+                <thead>
                   <tr>
                     <th>법령명</th>
                     <th>구분</th>
@@ -139,26 +139,26 @@ import { useState, useEffect } from 'react'
                     </tr>
                   ))}
                 </tbody>
-              </테이블>
+              </table>
             ) : (
-              <p className="report-empty">해당 캠프와 상위법령이 없습니다.</p>
+              <p className="report-empty">해당 키워드와 관련된 상위법령이 없습니다.</p>
             )}
           </div>
         )}
       </div>
 
-      {/* 타공격 조례 현황 */}
-      <div className="보고서 섹션">
-        <button className="보고서 섹션 헤더" onClick={() => toggleSection('기타')}>
-          <h3 className="report-section-title">타공격 조례 현황</h3>
-          <span className="report-section-toggle">{sections.other ? '접기' : '건너뛰기'}</span>
-        </버튼>
+      {/* 타 시도 조례 현황 */}
+      <div className="report-section">
+        <button className="report-section-header" onClick={() => toggleSection('other')}>
+          <h3 className="report-section-title">타 시도 조례 현황</h3>
+          <span className="report-section-toggle">{sections.other ? '접기' : '펼치기'}</span>
+        </button>
         {sections.other && (
-          <div className="보고서 섹션 본문">
-            <p className="보고서 섹션 댓글">{보고서.기타 댓글}</p>
+          <div className="report-section-body">
+            <p className="report-section-comment">{report.otherComment}</p>
             {report.otherItems.length > 0 ? (
-              <테이블 className="보고서 테이블">
-                <제목>
+              <table className="report-table">
+                <thead>
                   <tr>
                     <th style={{width:110}}>자치단체</th>
                     <th>조례명</th>
@@ -178,9 +178,9 @@ import { useState, useEffect } from 'react'
                     </tr>
                   ))}
                 </tbody>
-              </테이블>
+              </table>
             ) : (
-              <p className="report-empty">해당 캠프와 관련 타행위 조례가 없습니다.</p>
+              <p className="report-empty">해당 키워드와 관련된 타 시도 조례가 없습니다.</p>
             )}
           </div>
         )}
@@ -191,23 +191,23 @@ import { useState, useEffect } from 'react'
         <div className="ref-select-section">
           <h3 className="ref-select-title">참고할 조례 선택</h3>
           <p className="ref-select-desc">
-            조례 작성 시 노트할 타 시도 조례를 선택하세요.
-            선택 조례를 AI가 참고하여 조문을 생성합니다.
+            조례 작성 시 참고할 타 시도 조례를 선택하세요.
+            선택한 조례를 AI가 참고하여 조문을 생성합니다.
             선택하지 않으면 기본 방식으로 생성됩니다.
           </p>
           <div className="ref-select-list">
             {report.otherItems.map((item, i) => {
               const isSelected = (selectedRefs || []).find(r => r.name === item.name)
-              반품 (
+              return (
                 <label key={i} className={'ref-select-item' + (isSelected ? ' selected' : '')}>
-                  입력
+                  <input
                     type="checkbox"
                     checked={!!isSelected}
                     onChange={() => {
                       const current = selectedRefs || []
-                      선택되었다면 {
+                      if (isSelected) {
                         onSelectRefs(current.filter(r => r.name !== item.name))
-                      } 또 다른 {
+                      } else {
                         onSelectRefs([...current, item])
                       }
                     }}
@@ -228,55 +228,55 @@ import { useState, useEffect } from 'react'
       <div className="report-footer">
         <button className="btn btn-primary" onClick={onNext}>
           조례 작성으로 진행
-        </버튼>
+        </button>
       </div>
     </div>
   )
 }
 
-/* ─── 구성요소 ─── */
+/* ─── 보조 컴포넌트 ─── */
 
 function LoadingStep({ done, label }) {
-  반품 (
+  return (
     <div className={`loading-step ${done ? 'done' : 'active'}`}>
-      <span className="loading-step-icon">{완료 ? '✓' : '·'}</span>
+      <span className="loading-step-icon">{done ? '✓' : '·'}</span>
       <span>{label}</span>
     </div>
   )
 }
 
 function renderRelevance(level) {
-  레벨이 아니면 '-'를 반환합니다.
+  if (!level) return '-'
   const filled = Math.min(level, 3)
-  '●'.repeat(filled) + '○'.repeat(3 - filled)를 반환합니다.
+  return '●'.repeat(filled) + '○'.repeat(3 - filled)
 }
 
 /* ─── 유틸 ─── */
 
-함수 formatDate(d) {
-  d의 길이가 8이 아니면 d에 '-'를 반환합니다.
-  `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`을 반환합니다.
+function formatDate(d) {
+  if (!d || d.length !== 8) return d || '-'
+  return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`
 }
 
-함수 formatTimestamp(ts) {
+function formatTimestamp(ts) {
   const d = new Date(ts)
-  `${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.`를 반환합니다.
+  return `${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.`
 }
 
 /**
- * 검색 결과 보고서 생성
- * TODO: Claude API 캐스팅 시 AI가 이 구조를 채움
+ * 검색 결과로부터 리포트 구조 생성
+ * TODO: Claude API 연동 시 AI가 이 구조를 채움
  */
 function buildReportFromSearchData(data) {
   const kws = data.keywords.join(' ')
   const localItems = (data.localOrdinances?.items || []).map(item => ({
-    ...목,
-    관련성: 2,
-    메모: '',
+    ...item,
+    relevance: 2,
+    note: '',
   }))
   const upperItems = (data.upperLaws?.items || []).map(item => ({
-    ...목,
-    관련 기사: '',
+    ...item,
+    relatedArticle: '',
   }))
   const otherItems = (data.otherRegions?.items || [])
 
@@ -284,36 +284,36 @@ function buildReportFromSearchData(data) {
   const upperCount = upperItems.length
   const otherCount = otherItems.length
 
-  // 종합의견 (AI 캐스팅 전 기본설명)
+  // 종합의견 (AI 연동 전 기본 텍스트)
   const summary = []
-  localCount가 0이면 {
-    summary.push(`경기도에 "${kws}" 관련 조례가 현재 존재하지 않습니다. 새로운 연결을 검토할 수 있습니다.`)
-  } 또 다른 {
-    summary.push(`경기도에 "${kws}" 관련 조례가 ${localCount}건 확인이 됩니다. 기존 조례 관계를 검토하여 수신기 또는 관계 여부에 관계할 필요가 있습니다.`)
+  if (localCount === 0) {
+    summary.push(`경기도에 "${kws}" 관련 조례가 현재 존재하지 않습니다. 신규 제정을 검토할 수 있습니다.`)
+  } else {
+    summary.push(`경기도에 "${kws}" 관련 조례가 ${localCount}건 확인됩니다. 기존 조례와의 관계를 검토하여 제정 또는 개정 여부를 판단할 필요가 있습니다.`)
   }
-  상한 개수가 0보다 크면 {
-    summary.push(`관련법령이 ${upperCount}건이 연결되어 있습니다.
+  if (upperCount > 0) {
+    summary.push(`관련 상위법령이 ${upperCount}건 확인됩니다. 조례 제정 시 근거 법령으로 활용할 수 있습니다.`)
   }
-  (otherCount > 0인 경우) {
-    summary.push(`타 시도에서 동일한 조례가 ${otherCount}건 확인이 이루어졌습니다. 문 구성 시 참고할 수 있습니다.`)
+  if (otherCount > 0) {
+    summary.push(`타 시도에서 유사 조례가 ${otherCount}건 확인됩니다. 조문 구성 시 참고할 수 있습니다.`)
   }
-  summary.push('※ 이 보고서는 검색 결과를 기반으로 자동 생성된 것입니다. Claude AI 분석이 사건에 관한 것보다 정밀한 분석이 제공됩니다.')
+  summary.push('※ 이 리포트는 검색 결과를 기반으로 자동 생성된 것입니다. Claude AI 분석이 연동되면 보다 정밀한 분석이 제공됩니다.')
 
-  반품 {
-    키워드: 데이터.키워드,
-    타임스탬프: data.timestamp,
-    요약,
+  return {
+    keywords: data.keywords,
+    timestamp: data.timestamp,
+    summary,
     localComment: localCount > 0
       ? `총 ${localCount}건의 관련 조례가 확인되었습니다.`
       : `"${kws}" 관련 경기도 조례가 없습니다.`,
-    로컬 아이템,
-    상단 댓글: 상단 개수 > 0
-      ? `조례의 장거리 이동이 가능하도록 ${upperCount}건이 확인되었습니다.`
-      : `직접적인 관련 상위법령이 검색되었습니다.`,
-    상위 항목,
-    기타 의견: 기타 개수 > 0
-      ? `전국 광역자치단체 중 ${otherCount}건과 유사한 조례가 확인되었습니다.`
-      : `같은 조례가 검색되었습니다.`,
-    기타 항목,
+    localItems,
+    upperComment: upperCount > 0
+      ? `조례 제정의 근거가 될 수 있는 법령 ${upperCount}건이 확인되었습니다.`
+      : `직접적인 관련 상위법령이 검색되지 않았습니다.`,
+    upperItems,
+    otherComment: otherCount > 0
+      ? `전국 광역자치단체 중 ${otherCount}건의 유사 조례가 확인되었습니다.`
+      : `타 시도에서 유사 조례가 검색되지 않았습니다.`,
+    otherItems,
   }
 }

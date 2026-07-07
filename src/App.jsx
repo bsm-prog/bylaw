@@ -1,9 +1,9 @@
 import { useState } from 'react'
-'./phases/PhaseWizard'에서 PhaseWizard를 가져옵니다.
-'./steps/StepDashboard'에서 StepDashboard를 가져옵니다.
+import PhaseWizard from './phases/PhaseWizard'
+import StepDashboard from './steps/StepDashboard'
 
-함수 App() {
-  const [mode, setMode] = useState('phase') // 'phase' | 'step'
+function App() {
+  const [mode, setMode] = useState('phase')
   const [workConfig, setWorkConfig] = useState(null)
   const [searchData, setSearchData] = useState(null)
   const [selectedRefs, setSelectedRefs] = useState([])
@@ -19,8 +19,8 @@ import { useState } from 'react'
     setMode('phase')
   }
 
-  모드가 'step'이고 workConfig가 설정되어 있으면 {
-    반품 (
+  if (mode === 'step' && workConfig) {
+    return (
       <StepDashboard
         config={workConfig}
         searchData={searchData}
@@ -30,9 +30,9 @@ import { useState } from 'react'
     )
   }
 
-  반품 (
+  return (
     <PhaseWizard onStartWork={handleStartWork} />
   )
 }
 
-내보내기 기본 앱
+export default App

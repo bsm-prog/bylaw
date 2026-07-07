@@ -9,37 +9,37 @@ const mkPara = (content = "") => ({ id: uid(), content, items: [] })
 const mkItem = (content = "") => ({ id: uid(), content, subItems: [] })
 const mkSubItem = (content = "") => ({ id: uid(), content })
 const mkArticle = (number, title = "", content = "") => ({
-  id: uid(), number, title,
-  paragraphs: [mkPara(content)]
+  id: uid(), 숫자, 제목,
+  단락: [mkPara(content)]
 })
 
-/* ─── 자주 쓰는 조문 템플릿 ─── */
+/* ─── 자주 사용하는 조문 요약 ─── */
 const TEMPLATES = {
   "총칙": [
-    { title: "목적", content: "이 조례는 …에 관한 사항을 규정함으로써 …에 이바지함을 목적으로 한다." },
-    { title: "정의", content: "이 조례에서 사용하는 용어의 뜻은 다음과 같다." },
-    { title: "적용 범위", content: "이 조례는 …에 대하여 적용한다." },
-    { title: "다른 조례와의 관계", content: "…에 관하여 다른 조례에 특별한 규정이 있는 경우를 제외하고는 이 조례에서 정하는 바에 따른다." },
+    { 제목: "목적", 내용: "이 조이례는 …에 관한 사항을 규제함으로써 …에 이바지함을 목적으로 합니다." },
+    { title: "정의", content: "이 조례에서 사용하는 뜻의 뜻은 다음과 같습니다." },
+    { title: "적용 범위", content: "이 조례는 …에 대해 적용한다." },
+    { title: "다른 조례 관계", content: "… },
   ],
   "책무·계획": [
-    { title: "도지사의 책무", content: "도지사는 …을 위하여 필요한 시책을 수립·시행하고, 이에 대한 행정적·재정적 지원방안을 마련하도록 노력하여야 한다." },
-    { title: "기본계획 수립", content: "도지사는 …을 위하여 기본계획을 수립·시행하여야 한다." },
-    { title: "실태조사", content: "도지사는 …의 실태를 파악하기 위하여 실태조사를 실시할 수 있다." },
+    { title: "도지사의 책무", 내용: "도지사는… },
+    { title: "기본 계획 수립", 내용: "도지 사는 …을 위해 기본 계획을 수립하고 시행합니다." },
+    { title: "실태조사", content: "도지사는 …의 실태를 파악하기 위해 실태조사를 할 수 있습니다." },
   ],
   "위원회": [
-    { title: "위원회 설치 및 기능", content: "…에 관한 사항을 심의 또는 자문하기 위하여 경기도 ○○위원회를 둘 수 있다." },
-    { title: "위원회 구성", content: "위원회는 위원장과 부위원장 각 1명을 포함하여 00명 이내로 구성하고, 위원장과 부위원장은 위원 중에서 호선한다." },
-    { title: "위원장의 직무", content: "위원장은 위원회를 대표하고, 위원회의 업무를 총괄한다." },
-    { title: "회의 운영", content: "위원회의 회의는 위원장이 필요하다고 인정하는 때에 소집한다." },
-    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 있다." },
+    { title: "위원회 설치 및 기능", content: "… },
+    { title: "위원회 구성", 내용: "위원회는 위원장과 부위원장 각 1명을 포함하여 00명 이내로 구성하고, 위원장과 부위원장은 회원을 호선한다." },
+    { title: "위원장의 직무", 내용: "위원장은 커뮤니티를 대표하고, 커뮤니티의 역할을 역할한다." },
+    { 제목: "회의 운영", 내용: "위원회의 위원회는 위원장이 필요하다고 인정하는 소집한다." },
+    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 있습니다." },
   ],
   "지원·사업": [
-    { title: "지원 사업", content: "도지사는 …의 육성을 위하여 다음 각 호의 사업을 추진할 수 있다." },
-    { title: "재정 지원", content: "도지사는 …에 필요한 비용의 전부 또는 일부를 예산의 범위에서 지원할 수 있다." },
-    { title: "사업의 위탁", content: "도지사는 …에 따른 사업의 효율적인 추진을 위하여 관련 법인 또는 단체 등에 위탁할 수 있다." },
+    { title: "지원 사업", content: "도지사는 …의 애정을 위해 다음 각 호의 사업을 추진할 수 있습니다." },
+    { title: "재정 지원", 내용: "도지 사는 …에 필요한 비용의 전체 또는 일부를 랏의 범위에서 선택할 수 있습니다." },
+    { title: "사업의 활동", 내용: "도지 사는 … },
   ],
   "말미": [
-    { title: "시행규칙", content: "이 조례의 시행에 관하여 필요한 사항은 규칙으로 정한다." },
+    { title: "시행 규칙", 내용: "이 조례의 조사에 필요한 사항은 규칙으로 정한다." },
   ],
 }
 
@@ -48,24 +48,58 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
   const [editingId, setEditingId] = useState(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [selectedTemplates, setSelectedTemplates] = useState([])
+
+  const toggleTemplate = (tmpl) => {
+    setSelectedTemplates(prev => {
+      const exists = prev.find(t => t.title === tmpl.title)
+      만약 (존재한다면) 이전 필터(t => t.title !== tmpl.title)를 반환합니다.
+      [...이전, tmpl]을 반환합니다.
+    })
+  }
+
+  const addSelectedTemplates = () => {
+    선택된 템플릿의 길이가 0이면 반환합니다.
+    const startNum = articles.length > 0 ? Math.max(...articles.map(a => a.number)) + 1 : 1
+    const newArticles = selectedTemplates.map((tmpl, i) =>
+      mkArticle(startNum + i, tmpl.title, tmpl.content)
+    )
+    sync([...articles, ...newArticles])
+    setSelectedTemplates([])
+    setShowTemplates(false)
+  }
 
   const handleAiGenerate = async () => {
     setAiGenerating(true)
-    try {
+    노력하다 {
       const result = await generateArticleDraft(
-        data.keywords || [],
-        data.title,
-        data.type,
-        data.reportSummary || ''
+        데이터.키워드 || [],
+        데이터.title,
+        데이터 유형,
+        데이터.reportSummary || ''
       )
-      if (result && result.articles) {
+      결과가 기사와 일치하는 경우 {
         const newArticles = result.articles.map((a, i) => mkArticle(i + 1, a.title, a.paragraphs?.[0]?.content || ''))
-        sync(newArticles)
+        동기화(새로운 기사)
       }
     } catch (err) {
-      console.warn('AI 조문 생성 실패:', err.message)
-      alert('AI 연결에 실패했습니다. 템플릿에서 수동으로 추가해 주세요.')
-    } finally {
+      console.warn('AI 조문 생성 실패, 기본 폴더 사용:', err.message)
+      // AI 실패 시 기반 기본 조문 자동 생성
+      const topic = data.title || (data.keywords || []).join(' ') || '○○'
+      const fallbackArticles = [
+        mkArticle(1, '목적', '이 조례는' + topic + '에 필요한 사항을 규제함으로써 도민의 삶의 질을 다듬는 데 이바지함을 목적으로 합니다.'),
+        mkArticle(2, '정의', '이 조례에서 사용하는 뜻의 뜻은 다음과 같다.'),
+        mkArticle(3, '도지사의 책무', '경기도지사(이하 "도지사"라 한다)는 ' + topic + '을 대상으로 필요한 시책을 보고시행하고, 이에 대한 적·재정적 지원 아이디어를 얻으려고 노력해야 합니다.'),
+        mkArticle(4, '위원회 설치 및 기능', '도지사는 다음 각 호의 사항을 심의 또는 하기 위한 경기도 ○○위원회(이하 "위원회"라 한다)를 둘 수 있다.'),
+        mkArticle(5, '위원회 구성', '위원회는 의장과 부위원장 각 1명을 포함하여 15명 이내의 의원으로 구성하고, 위원장과 부위원장은 위원회를 호선한다.'),
+        mkArticle(6, '위원장의 직무', '위원장은 커뮤니티를 대표하고, 커뮤니티의 역할을 한다.'),
+        mkArticle(7, '위원회 운영', '위원회의 의사는 위원장이 필요하다고 인정하는 소집한다.'),
+        mkArticle(8, '지원 사업', '도지사는' + topic + '을 위해 다음 각호의 사업을 추진할 수 있습니다.'),
+        mkArticle(9, '사업의 후속', '도지사는 제8조에 따른 사업의 효율적인 추진을 대상으로 하는 경우 또는 빌어먹을 「경기도 사무탁 조위례」에 따라서는 할 수 있습니다.'),
+        mkArticle(10, '시행 규칙', '이 조례의 강도에 필요한 사항은 규칙으로 정한다.'),
+      ]
+      동기화(fallbackArticles)
+    } 마지막으로 {
       setAiGenerating(false)
     }
   }
@@ -75,10 +109,10 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
     onUpdate('articles', newArticles)
   }
 
-  /* ─── 조 조작 ─── */
+  /* ─── 조 교차 ─── */
   const addArticle = (template) => {
     const num = articles.length > 0 ? Math.max(...articles.map(a => a.number)) + 1 : 1
-    const art = template
+    const art = 템플릿
       ? mkArticle(num, template.title, template.content)
       : mkArticle(num)
     sync([...articles, art])
@@ -89,13 +123,13 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
   const removeArticle = (id) => {
     const filtered = articles.filter(a => a.id !== id)
     sync(filtered.map((a, i) => ({ ...a, number: i + 1 })))
-    if (editingId === id) setEditingId(null)
+    편집 ID가 id와 같으면 편집 ID를 null로 설정합니다.
   }
 
   const moveArticle = (idx, dir) => {
-    const next = [...articles]
+    const next = [...기사]
     const ni = idx + dir
-    if (ni < 0 || ni >= next.length) return
+    if (ni < 0 || ni >= next.length) 반환
     ;[next[idx], next[ni]] = [next[ni], next[idx]]
     sync(next.map((a, i) => ({ ...a, number: i + 1 })))
   }
@@ -104,46 +138,46 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
     sync(articles.map(a => a.id === id ? { ...a, ...updates } : a))
   }
 
-  /* ─── 항 조작 ─── */
+  /* ─── 손잡이 ─── */
   const addParagraph = (artId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: [...a.paragraphs, mkPara()]
+      ...a, 단락: [...a.paragraphs, mkPara()]
     }))
   }
 
   const removeParagraph = (artId, paraId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.filter(p => p.id !== paraId)
+      ...a, 단락: a.paragraphs.filter(p => p.id !== paraId)
     }))
   }
 
   const updateParagraph = (artId, paraId, content) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : { ...p, content })
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : { ...p, 내용 })
     }))
   }
 
-  /* ─── 호 조작 ─── */
+  /* ─── 호 거래 ─── */
   const addItem = (artId, paraId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: [...p.items, mkItem()]
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: [...p.items, mkItem()]
       })
     }))
   }
 
   const removeItem = (artId, paraId, itemId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.filter(i => i.id !== itemId)
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: p.items.filter(i => i.id !== itemId)
       })
     }))
   }
 
   const updateItem = (artId, paraId, itemId, content) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : { ...i, content })
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: p.items.map(i => i.id !== itemId ? i : { ...i, 콘텐츠 })
       })
     }))
   }
@@ -151,9 +185,9 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
   /* ─── 목 조작 ─── */
   const addSubItem = (artId, paraId, itemId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
-          ...i, subItems: [...i.subItems, mkSubItem()]
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: p.items.map(i => i.id !== itemId ? i : {
+          ...i, 하위 항목: [...i.subItems, mkSubItem()]
         })
       })
     }))
@@ -161,9 +195,9 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
 
   const removeSubItem = (artId, paraId, itemId, subId) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
-          ...i, subItems: i.subItems.filter(s => s.id !== subId)
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: p.items.map(i => i.id !== itemId ? i : {
+          ...i, 하위 항목: i.subItems.filter(s => s.id !== subId)
         })
       })
     }))
@@ -171,29 +205,29 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
 
   const updateSubItem = (artId, paraId, itemId, subId, content) => {
     sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
+      ...a, 단락: a.paragraphs.map(p => p.id !== paraId ? p : {
+        ...p, 항목: p.items.map(i => i.id !== itemId ? i : {
           ...i, subItems: i.subItems.map(s => s.id !== subId ? s : { ...s, content })
         })
       })
     }))
   }
 
-  return (
+  반품 (
     <div className="step-content">
-      <h2 className="step-title">STEP 2. 조문편집</h2>
+      <h2 className="step-title">2단계. 조문편집</h2>
 
       {/* AI 초안 생성 */}
       <div className="ai-generate-area">
-        <button
+        <버튼
           className="btn btn-primary"
           onClick={handleAiGenerate}
-          disabled={aiGenerating}
+          비활성화됨={aiGenerated}
         >
-          {aiGenerating ? 'AI 생성 중...' : 'AI 조문 초안 생성'}
-        </button>
+          {ai생성 중 ? 'AI 생성 중...' : 'AI 조문 초안 생성'}
+        </버튼>
         <p className="form-note">
-          키워드와 사전조사 리포트를 바탕으로 조문 초안을 자동 생성합니다. 생성 후 자유롭게 수정 가능합니다.
+          키워드와 사전조사 보고서를 바탕으로 조문 초안을 자동으로 생성합니다. 생성 후 수정 가능합니다.
         </p>
       </div>
 
@@ -207,7 +241,7 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
           {articles.map((art, artIdx) => (
             <ArticleBlock
               key={art.id}
-              article={art}
+              기사={예술}
               artIdx={artIdx}
               totalCount={articles.length}
               isEditing={editingId === art.id}
@@ -234,51 +268,67 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
       <div className="add-article-area">
         <button className="btn btn-outline" onClick={() => addArticle()}>
           + 빈 조 추가
-        </button>
+        </버튼>
         <button className="btn btn-outline" onClick={() => setShowTemplates(!showTemplates)}>
-          {showTemplates ? '템플릿 닫기' : '+ 템플릿에서 추가'}
-        </button>
+          {쇼템플릿 ? '템플릿 닫기' : '+폴릿에서 추가'}
+        </버튼>
       </div>
 
-      {/* 템플릿 패널 */}
+      {/* 패널 패널 */}
       {showTemplates && (
         <div className="template-panel">
           <h3 className="template-panel-title">자주 사용하는 조문</h3>
+          <p className="template-panel-desc">여러 개를 선택하면 한 번 더 추가할 수 있습니다.</p>
           {Object.entries(TEMPLATES).map(([category, items]) => (
             <div key={category} className="template-category">
-              <h4 className="template-category-title">{category}</h4>
+              <h4 className="template-category-title">{카테고리}</h4>
               <div className="template-items">
-                {items.map((tmpl, i) => (
-                  <button key={i} className="template-item" onClick={() => addArticle(tmpl)}>
-                    {tmpl.title}
-                  </button>
-                ))}
+                {items.map((tmpl, i) => {
+                  const isSelected = selectedTemplates.find(t => t.title === tmpl.title)
+                  반품 (
+                    <버튼
+                      키={i}
+                      className={'template-item' + (isSelected ? ' selected' : '')}
+                      onClick={() => toggleTemplate(tmpl)}
+                    >
+                      {isSelected ? '✓ ' : ''}{tmpl.title}
+                    </버튼>
+                  )
+                })}
               </div>
             </div>
           ))}
+          {selectedTemplates.length > 0 && (
+            <div className="template-action">
+              <span className="template-count">{selectedTemplates.length}개 선택됨</span>
+              <button className="btn btn-primary" onClick={addSelectedTemplates}>
+                선택 문 추가
+              </버튼>
+            </div>
+          )}
         </div>
       )}
 
       {/* 다음 단계 */}
       <div className="step-footer">
-        <button className="btn btn-primary" onClick={onNext}>STEP 3로</button>
+        <button className="btn btn-primary" onClick={onNext}>3단계로</button>
       </div>
     </div>
   )
 }
 
 /* ─── 조문 블록 ─── */
-function ArticleBlock({
-  article: art, artIdx, totalCount,
+함수 ArticleBlock({
+  기사: 예술, artIdx, 총 개수,
   isEditing, onStartEdit, onStopEdit,
   onRemove, onMove, onUpdateTitle,
-  onAddParagraph, onRemoveParagraph, onUpdateParagraph,
+  단락 추가, 단락 제거, 단락 업데이트
   onAddItem, onRemoveItem, onUpdateItem,
   onAddSubItem, onRemoveSubItem, onUpdateSubItem,
 }) {
-  if (!isEditing) {
+  편집 중이 아니면 {
     // ─── 보기 모드 ───
-    return (
+    반품 (
       <div className="article-block">
         <div className="article-header">
           <span className="article-number">제{art.number}조({art.title || '제목 없음'})</span>
@@ -315,16 +365,16 @@ function ArticleBlock({
     )
   }
 
-  // ─── 편집 모드 ───
-  return (
+  // ─── 수정 편집 ───
+  반품 (
     <div className="article-block editing">
       <div className="article-header">
         <div className="article-title-edit">
           <span className="article-number-label">제{art.number}조</span>
-          <input
+          입력
             type="text"
             className="article-title-input"
-            value={art.title}
+            값={art.title}
             onChange={e => onUpdateTitle(e.target.value)}
             placeholder="조문 제목"
           />
@@ -337,17 +387,17 @@ function ArticleBlock({
 
       <div className="article-body-edit">
         {art.paragraphs.map((para, pi) => (
-          <div key={para.id} className="para-edit">
+          <div 키={para.id} className="para-edit">
             <div className="para-edit-row">
               {art.paragraphs.length > 1 && (
                 <span className="para-edit-prefix">{CIRCLED[pi] || `(${pi + 1})`}</span>
               )}
-              <textarea
+              <텍스트 영역
                 className="para-textarea"
-                value={para.content}
+                값={para.content}
                 onChange={e => onUpdateParagraph(para.id, e.target.value)}
                 placeholder="항 내용을 입력하세요"
-                rows={2}
+                행={2}
               />
               {art.paragraphs.length > 1 && (
                 <button className="inline-remove" onClick={() => onRemoveParagraph(para.id)}>삭제</button>
@@ -359,10 +409,10 @@ function ArticleBlock({
               <div key={item.id} className="item-edit">
                 <div className="item-edit-row">
                   <span className="item-edit-prefix">{ii + 1}.</span>
-                  <input
+                  입력
                     type="text"
                     className="item-input"
-                    value={item.content}
+                    값={item.content}
                     onChange={e => onUpdateItem(para.id, item.id, e.target.value)}
                     placeholder="호 내용"
                   />
@@ -373,10 +423,10 @@ function ArticleBlock({
                 {item.subItems.map((sub, si) => (
                   <div key={sub.id} className="subitem-edit">
                     <span className="subitem-edit-prefix">{MOK[si] || '?'}.</span>
-                    <input
+                    입력
                       type="text"
-                      className="subitem-input"
-                      value={sub.content}
+                      className="하위 항목 입력"
+                      값={하위 내용}
                       onChange={e => onUpdateSubItem(para.id, item.id, sub.id, e.target.value)}
                       placeholder="목 내용"
                     />

@@ -1,214 +1,225 @@
 /**
- * 법제처 Open API 연동 모듈
- * Cloudflare Worker 프록시를 통해 CORS 우회
+ * Claude AI API 연동 모듈
+ * Cloudflare Worker 프록시를 통해 API 키를 숨기고 호출
+ *
+ * 배포 시: PROXY_URL을 실제 Cloudflare Worker 주소로 교체
+ * 개발 시: 직접 Anthropic API 호출 (테스트용)
  */
 
-const PROXY_BASE = 'https://lawgill.papy98.workers.dev'
-const OC = 'bitsam24'
-const API_BASE = 'https://www.law.go.kr/DRF/lawSearch.do'
+// Cloudflare Worker 프록시 URL (배포 시 설정)
+const AI_PROXY_URL = 'https://bylaw.papy98.workers.dev'
 
-const ORG_GYEONGGI = '6410000'
+const MODEL = 'claude-sonnet-4-6'
+const MAX_TOKENS = 2000
 
 /**
- * 프록시를 통한 API 호출
+ * Claude API 호출 (프록시 경유)
  */
-async function fetchViaProxy(apiUrl) {
-  const proxyUrl = PROXY_BASE + '/?url=' + encodeURIComponent(apiUrl)
-  console.log('[lawApi] 호출:', apiUrl)
-  const res = await fetch(proxyUrl)
-  if (!res.ok) throw new Error('API 요청 실패: ' + res.status)
-  const text = await res.text()
-  console.log('[lawApi] 응답 길이:', text.length)
-  return text
-}
-
-/**
- * XML 파싱 (브라우저 DOMParser 활용)
- */
-function parseXML(xmlText) {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xmlText, 'text/xml')
-  return doc
-}
-
-/**
- * 자치법규 검색 결과 추출
- */
-function extractOrdinItems(xmlText) {
-  const doc = parseXML(xmlText)
-  const totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
-  const items = []
-
-  doc.querySelectorAll('law').forEach(function(law) {
-    var name = law.querySelector('자치법규명')
-    var org = law.querySelector('자치단체명')
-    var type = law.querySelector('자치법규분류')
-    var date = law.querySelector('공포일자')
-    var serial = law.querySelector('자치법규일련번호')
-
-    items.push({
-      id: serial?.textContent || '',
-      name: name?.textContent || '',
-      org: org?.textContent || '',
-      type: type?.textContent || '',
-      date: date?.textContent || '',
-      serial: serial?.textContent || '',
-      url: serial?.textContent
-        ? 'https://www.law.go.kr/자치법규/' + encodeURIComponent(name?.textContent || '')
-        : '',
-    })
-  })
-
-  console.log('[lawApi] 자치법규 추출:', items.length, '건')
-  return { totalCnt: parseInt(totalCnt), items }
-}
-
-/**
- * 법령 검색 결과 추출
- */
-function extractLawItems(xmlText) {
-  const doc = parseXML(xmlText)
-  const totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
-  const items = []
-
-  doc.querySelectorAll('law').forEach(function(law) {
-    // 여러 가능한 태그명 시도
-    var name = law.querySelector('법령명한글') || law.querySelector('법령명')
-    var id = law.querySelector('법령ID') || law.querySelector('법령아이디')
-    var mst = law.querySelector('법령일련번호') || law.querySelector('법령MST')
-    var type = law.querySelector('법령구분명') || law.querySelector('법령종류')
-    var date = law.querySelector('시행일자') || law.querySelector('공포일자')
-
-    if (name?.textContent) {
-      items.push({
-        id: id?.textContent || '',
-        mst: mst?.textContent || '',
-        name: name?.textContent || '',
-        type: type?.textContent || '',
-        date: date?.textContent || '',
-        url: 'https://www.law.go.kr/법령/' + encodeURIComponent(name?.textContent || ''),
-      })
-    }
-  })
-
-  console.log('[lawApi] 법령 추출:', items.length, '건')
-  return { totalCnt: parseInt(totalCnt), items }
-}
-
-/**
- * API URL 생성
- */
-function buildUrl(params) {
-  var parts = [
-    API_BASE,
-    '?OC=' + OC,
-    '&type=XML',
-  ]
-  Object.keys(params).forEach(function(key) {
-    if (params[key]) {
-      parts.push('&' + key + '=' + encodeURIComponent(params[key]))
-    }
-  })
-  return parts.join('')
-}
-
-/* ─── 공개 API 함수 ─── */
-
-/**
- * 경기도 기존 조례 검색
- */
-export async function searchGyeonggiOrdinances(query, display) {
-  var apiUrl = buildUrl({
-    target: 'ordin',
-    query: query,
-    display: String(display || 20),
-    org: ORG_GYEONGGI,
-  })
-  var text = await fetchViaProxy(apiUrl)
-  return extractOrdinItems(text)
-}
-
-/**
- * 상위법령 검색
- */
-export async function searchUpperLaws(query, display) {
-  var apiUrl = buildUrl({
-    target: 'law',
-    query: query,
-    display: String(display || 20),
-  })
-  var text = await fetchViaProxy(apiUrl)
-  return extractLawItems(text)
-}
-
-/**
- * 타 시도 조례 검색 (경기도 제외)
- */
-export async function searchOtherRegionOrdinances(query, display) {
-  var apiUrl = buildUrl({
-    target: 'ordin',
-    query: query,
-    display: String(display || 100),
-  })
-  var text = await fetchViaProxy(apiUrl)
-  var result = extractOrdinItems(text)
-
-  // 경기도 제외만 적용 (광역/기초 모두 포함)
-  result.items = result.items.filter(function(item) {
-    return item.org.indexOf('경기도') === -1
-  })
-
-  console.log('[lawApi] 타 시도 필터 후:', result.items.length, '건')
-  return result
-}
-
-/**
- * 키워드 3종 통합 검색
- */
-export async function searchAll(keywords) {
-  var query = keywords.filter(Boolean).join(' ')
+async function callClaude(systemPrompt, userPrompt) {
+  const body = {
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: systemPrompt,
+    messages: [
+      { role: 'user', content: userPrompt }
+    ],
+  }
 
   try {
-    var results = await Promise.allSettled([
-      searchGyeonggiOrdinances(query),
-      searchUpperLaws(query),
-      searchOtherRegionOrdinances(query, 100),
-    ])
+    const res = await fetch(AI_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
 
-    var local = results[0]
-    var upper = results[1]
-    var others = results[2]
-
-    if (local.status === 'rejected') console.warn('[lawApi] 경기도 조례 검색 실패:', local.reason)
-    if (upper.status === 'rejected') console.warn('[lawApi] 상위법령 검색 실패:', upper.reason)
-    if (others.status === 'rejected') console.warn('[lawApi] 타 시도 검색 실패:', others.reason)
-
-    return {
-      keywords: keywords,
-      timestamp: new Date().toISOString(),
-      localOrdinances: local.status === 'fulfilled' ? local.value : { totalCnt: 0, items: [] },
-      upperLaws: upper.status === 'fulfilled' ? upper.value : { totalCnt: 0, items: [] },
-      otherRegions: others.status === 'fulfilled' ? others.value : { totalCnt: 0, items: [] },
-      errors: results
-        .filter(function(r) { return r.status === 'rejected' })
-        .map(function(r) { return r.reason?.message || '알 수 없는 오류' }),
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error('AI API 오류: ' + res.status + ' ' + errText)
     }
+
+    const data = await res.json()
+    const text = data.content
+      ?.filter(item => item.type === 'text')
+      ?.map(item => item.text)
+      ?.join('\n') || ''
+
+    return text
   } catch (err) {
-    throw new Error('검색 중 오류: ' + err.message)
+    console.error('Claude API 호출 실패:', err)
+    throw err
   }
 }
 
+/* ─── 공개 AI 함수들 ─── */
+
 /**
- * API 연결 테스트
+ * Phase 2: 사전조사 AI 분석 리포트 생성
  */
-export async function testConnection() {
+export async function generateAnalysisReport(keywords, searchResults) {
+  const system = `당신은 경기도의회 입법 전문가입니다. 검색 결과를 분석하여 조례 제·개정을 위한 사전조사 리포트를 작성합니다.
+반드시 한국어로 응답하세요. JSON 형식으로만 응답하세요.`
+
+  const user = `다음 검색 결과를 분석하여 사전조사 리포트를 JSON으로 작성해주세요.
+
+검색 키워드: ${keywords.join(', ')}
+
+경기도 기존 조례: ${JSON.stringify(searchResults.localOrdinances?.items?.map(i => i.name) || [])}
+상위법령: ${JSON.stringify(searchResults.upperLaws?.items?.map(i => i.name) || [])}
+타 시도 조례: ${JSON.stringify(searchResults.otherRegions?.items?.map(i => i.name + '(' + i.org + ')') || [])}
+
+다음 JSON 형식으로 응답해주세요:
+{
+  "summary": ["종합의견 문단1", "종합의견 문단2", ...],
+  "localComment": "경기도 기존 조례 분석 코멘트",
+  "upperComment": "상위법령 분석 코멘트",
+  "otherComment": "타 시도 현황 코멘트",
+  "recommendedType": "제정 또는 일부개정 또는 전부개정"
+}`
+
+  const text = await callClaude(system, user)
+  return JSON.parse(text.replace(/```json|```/g, '').trim())
+}
+
+/**
+ * STEP 2: 조문 초안 생성
+ */
+export async function generateArticleDraft(keywords, ordinanceTitle, type, reportSummary, refTexts) {
+  const hasRefs = refTexts && refTexts.length > 0
+
+  const system = `당신은 경기도의회 조례 입법 전문가입니다. 조례 조문을 작성합니다.
+반드시 한국어로 응답하세요. JSON 형식으로만 응답하세요.
+조문은 한국 지방자치단체 조례의 표준 형식을 따릅니다.
+${hasRefs ? '참고 조례의 원문이 제공됩니다. 해당 조례의 조문 구성, 내용, 체계를 참고하여 경기도 조례로 재작성해주세요. 단순히 지자체명만 바꾸지 말고, 경기도의 특성에 맞게 조정해주세요.' : ''}`
+
+  let refSection = ''
+  if (hasRefs) {
+    refSection = '\n\n[참고 조례 원문]\n' + refTexts.map(function(r) {
+      return '--- ' + r.name + ' ---\n' + r.fullText
+    }).join('\n\n')
+  }
+
+  const user = `다음 조건으로 조례 조문 초안을 JSON으로 작성해주세요.
+
+조례명: ${ordinanceTitle || keywords.join(' ') + '에 관한 조례'}
+유형: ${type}
+키워드: ${keywords.join(', ')}
+배경: ${reportSummary || ''}
+${refSection}
+
+다음 JSON 형식으로 응답해주세요:
+{
+  "articles": [
+    {
+      "title": "목적",
+      "paragraphs": [
+        {
+          "content": "항 내용",
+          "items": [
+            { "content": "호 내용", "subItems": [{ "content": "목 내용" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+${hasRefs ? '참고 조례의 조문 구성과 내용을 적극 참고하되, 경기도 조례에 맞게 재작성해주세요.' : '일반적인 조례 구성: 목적조, 정의조, 책무조, 위원회 설치·구성·운영, 지원사업, 사업위탁, 시행규칙 순서.'}
+각 조문은 실무에서 바로 사용 가능한 수준으로 구체적으로 작성해주세요.`
+
+  const text = await callClaude(system, user)
+  return JSON.parse(text.replace(/```json|```/g, '').trim())
+}
+
+/**
+ * STEP 4: 제안이유 초안 생성
+ */
+export async function generateReason(data) {
+  const system = `당신은 경기도의회 조례 입법 전문가입니다. 조례안의 제안이유를 작성합니다.
+반드시 한국어로 응답하세요. 일반 텍스트로만 응답하세요 (JSON 아님).
+문체: 공문서체 (~함, ~임, ~임.), 간결하고 논리적.`
+
+  const articleTitles = (data.articles || []).map(a => '제' + a.number + '조(' + (a.title || '') + ')').join(', ')
+
+  const user = `다음 조례안의 제안이유를 작성해주세요.
+
+조례명: ${data.title || '○○'}
+유형: ${data.type}
+조문 구성: ${articleTitles || '(미작성)'}
+
+제안이유는 다음 구조로 작성:
+1. 현황 및 문제점 (왜 이 조례가 필요한지)
+2. 상위법령 근거 (법적 근거)
+3. 조례 제정/개정의 목적 및 기대효과
+
+약 200~400자 내외로 작성해주세요.`
+
+  return await callClaude(system, user)
+}
+
+/**
+ * STEP 4: 주요내용 초안 생성
+ */
+export async function generateMainContent(data) {
+  const system = `당신은 경기도의회 조례 입법 전문가입니다. 조례안의 주요내용을 작성합니다.
+반드시 한국어로 응답하세요. 일반 텍스트로만 응답하세요 (JSON 아님).
+형식: "가. …을 규정함(안 제○조 ~ 제○조)." 형태의 항목별 나열.`
+
+  const articles = (data.articles || []).map(a => ({
+    number: a.number,
+    title: a.title || '',
+    content: a.paragraphs?.[0]?.content?.slice(0, 50) || '',
+  }))
+
+  const user = `다음 조례안의 주요내용을 작성해주세요.
+
+조례명: ${data.title || '○○'}
+유형: ${data.type}
+조문 목록:
+${articles.map(a => '제' + a.number + '조(' + a.title + ') ' + a.content + '...').join('\n')}
+
+"가.", "나.", "다.", "라." 형태로 조문 내용을 그룹별로 요약해주세요.
+각 항목 끝에 "(안 제○조 ~ 제○조)." 형태로 조문 번호를 표기해주세요.`
+
+  return await callClaude(system, user)
+}
+
+/**
+ * STEP 5: 신구조문대비표 생성
+ */
+export async function generateCompareTable(currentArticles, newArticles) {
+  const system = `당신은 경기도의회 조례 입법 전문가입니다. 신구조문대비표를 작성합니다.
+반드시 한국어로 응답하세요. JSON 형식으로만 응답하세요.
+축약표기: 변경 없는 항은 "(생 략)" / "(현행과 같음)", 신설은 "<신 설>", 삭제는 "<삭 제>"`
+
+  const user = `다음 현행 조문과 개정안을 비교하여 신구조문대비표를 JSON으로 작성해주세요.
+
+현행 조문:
+${JSON.stringify(currentArticles)}
+
+개정안 조문:
+${JSON.stringify(newArticles)}
+
+다음 JSON 형식으로 응답:
+{
+  "amendments": [
+    {
+      "articleRef": "제○조제○항",
+      "type": "modify 또는 add 또는 delete",
+      "current": "현행 조문 텍스트",
+      "proposed": "개정안 텍스트"
+    }
+  ]
+}`
+
+  return JSON.parse((await callClaude(system, user)).replace(/```json|```/g, '').trim())
+}
+
+/**
+ * AI 연결 테스트
+ */
+export async function testAIConnection() {
   try {
-    var apiUrl = buildUrl({
-      target: 'ordin',
-      query: '청년',
-      display: '1',
-    })
-    await fetchViaProxy(apiUrl)
+    await callClaude('You are a test.', '응답으로 "연결 성공"만 말해주세요.')
     return { connected: true }
   } catch (err) {
     return { connected: false, error: err.message }

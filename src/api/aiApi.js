@@ -83,10 +83,20 @@ export async function generateAnalysisReport(keywords, searchResults) {
 /**
  * STEP 2: 조문 초안 생성
  */
-export async function generateArticleDraft(keywords, ordinanceTitle, type, reportSummary) {
+export async function generateArticleDraft(keywords, ordinanceTitle, type, reportSummary, refTexts) {
+  const hasRefs = refTexts && refTexts.length > 0
+
   const system = `당신은 경기도의회 조례 입법 전문가입니다. 조례 조문을 작성합니다.
 반드시 한국어로 응답하세요. JSON 형식으로만 응답하세요.
-조문은 한국 지방자치단체 조례의 표준 형식을 따릅니다.`
+조문은 한국 지방자치단체 조례의 표준 형식을 따릅니다.
+${hasRefs ? '참고 조례의 원문이 제공됩니다. 해당 조례의 조문 구성, 내용, 체계를 참고하여 경기도 조례로 재작성해주세요. 단순히 지자체명만 바꾸지 말고, 경기도의 특성에 맞게 조정해주세요.' : ''}`
+
+  let refSection = ''
+  if (hasRefs) {
+    refSection = '\n\n[참고 조례 원문]\n' + refTexts.map(function(r) {
+      return '--- ' + r.name + ' ---\n' + r.fullText
+    }).join('\n\n')
+  }
 
   const user = `다음 조건으로 조례 조문 초안을 JSON으로 작성해주세요.
 
@@ -94,6 +104,7 @@ export async function generateArticleDraft(keywords, ordinanceTitle, type, repor
 유형: ${type}
 키워드: ${keywords.join(', ')}
 배경: ${reportSummary || ''}
+${refSection}
 
 다음 JSON 형식으로 응답해주세요:
 {
@@ -112,7 +123,7 @@ export async function generateArticleDraft(keywords, ordinanceTitle, type, repor
   ]
 }
 
-일반적인 조례 구성: 목적조, 정의조, 책무조, 위원회 설치·구성·운영, 지원사업, 사업위탁, 시행규칙 순서.
+${hasRefs ? '참고 조례의 조문 구성과 내용을 적극 참고하되, 경기도 조례에 맞게 재작성해주세요.' : '일반적인 조례 구성: 목적조, 정의조, 책무조, 위원회 설치·구성·운영, 지원사업, 사업위탁, 시행규칙 순서.'}
 각 조문은 실무에서 바로 사용 가능한 수준으로 구체적으로 작성해주세요.`
 
   const text = await callClaude(system, user)

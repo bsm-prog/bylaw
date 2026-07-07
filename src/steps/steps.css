@@ -1376,3 +1376,30 @@
   gap: 8px;
   justify-content: flex-end;
 }
+/* 템플릿 복수 선택 */
+.template-panel-desc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.template-item.selected {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.template-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.template-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+}

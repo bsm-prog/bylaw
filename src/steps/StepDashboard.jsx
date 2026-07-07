@@ -17,11 +17,17 @@ const STEP_MENU = [
 ]
 
 export default function StepDashboard({ config, searchData, onBackToPhase }) {
+  const keywords = searchData?.keywords || []
+  const autoTitle = keywords.length > 0
+    ? '경기도 ' + keywords.join(' ') + '에 관한 조례'
+    : ''
+
   const [currentStep, setCurrentStep] = useState(1)
   const [ordinanceData, setOrdinanceData] = useState({
     type: config.type,
     targetOrdinance: config.targetOrdinance,
-    title: '',
+    keywords: keywords,
+    title: autoTitle,
     originalTitle: config.targetOrdinance?.name || '',
     billNumber: '',
     submitDate: '',
@@ -33,6 +39,7 @@ export default function StepDashboard({ config, searchData, onBackToPhase }) {
     reason: '',
     mainContent: '',
     amendments: [],
+    reportSummary: searchData?.localOrdinances ? '사전조사 완료' : '',
   })
 
   const isAmendment = config.type === '일부개정' || config.type === '전부개정'

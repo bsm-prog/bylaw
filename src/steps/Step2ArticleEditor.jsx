@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { generateArticleDraft } from '../api/aiApi'
+import { getOrdinanceFullText } from '../api/lawApi'
 
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳".split("").filter(c=>c)
 const MOK = ["가","나","다","라","마","바","사","아","자","차","카","타","파","하"]
@@ -31,7 +32,7 @@ const TEMPLATES = {
     { title: "위원회 구성", content: "위원회는 위원장과 부위원장 각 1명을 포함하여 00명 이내로 구성하고, 위원장과 부위원장은 위원 중에서 호선한다." },
     { title: "위원장의 직무", content: "위원장은 위원회를 대표하고, 위원회의 업무를 총괄한다." },
     { title: "회의 운영", content: "위원회의 회의는 위원장이 필요하다고 인정하는 때에 소집한다." },
-    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 있다." },
+    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 정할 수 있다." },
   ],
   "지원·사업": [
     { title: "지원 사업", content: "도지사는 …의 육성을 위하여 다음 각 호의 사업을 추진할 수 있다." },
@@ -74,14 +75,26 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
   const handleAiGenerate = async () => {
     setAiGenerating(true)
     try {
-      const refInfo = hasRefs
-        ? '참고 조례: ' + data.selectedRefs.map(r => r.name).join(', ')
-        : ''
+      // 참고 조례 원문 가져오기
+      var refTexts = []
+      if (hasRefs) {
+        console.log('[Step2] 참고 조례 원문 조회 중...', data.selectedRefs.length, '건')
+        for (var i = 0; i < data.selectedRefs.length; i++) {
+          var ref = data.selectedRefs[i]
+          var fullText = await getOrdinanceFullText(ref.name)
+          if (fullText) {
+            refTexts.push(fullText)
+            console.log('[Step2] 원문 조회 완료:', ref.name)
+          }
+        }
+      }
+
       const result = await generateArticleDraft(
         data.keywords || [],
         data.title,
         data.type,
-        (data.reportSummary || '') + '\n' + refInfo
+        data.reportSummary || '',
+        refTexts
       )
       if (result && result.articles) {
         const newArticles = result.articles.map((a, i) => mkArticle(i + 1, a.title, a.paragraphs?.[0]?.content || ''))

@@ -845,3 +845,71 @@
     align-items: flex-start;
   }
 }
+
+/* 참고 조례 선택 */
+.ref-select-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: var(--space-lg);
+  margin-top: var(--space-xl);
+}
+
+.ref-select-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.ref-select-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+  line-height: 1.7;
+  margin-bottom: var(--space-md);
+}
+
+.ref-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ref-select-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-light);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.ref-select-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.ref-select-item.selected {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.ref-select-item input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.ref-select-name {
+  flex: 1;
+  font-size: var(--text-base);
+}
+
+.ref-select-org {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.ref-select-count {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-top: var(--space-sm);
+}

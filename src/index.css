@@ -1,0 +1,97 @@
+/* ─── 조례 작성 도우미 디자인 시스템 ─── */
+/* 경기도의회 홈페이지 톤: 네이비 헤더, 글씨 중심, 표 구조, 장식 최소화 */
+
+:root {
+  /* 색상 — 경기도의회 톤 기반 */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f1f4;
+  --color-border: #d5d9e0;
+  --color-border-light: #e5e8ed;
+
+  --color-header: #1a2744;
+  --color-header-accent: #2e4a7a;
+  --color-primary: #1a2744;
+  --color-primary-light: #e8ecf3;
+
+  --color-accent: #1a6fb5;
+  --color-accent-hover: #145d99;
+  --color-accent-light: #eaf3fb;
+
+  --color-text: #222222;
+  --color-text-sub: #555555;
+  --color-text-muted: #999999;
+
+  --color-danger: #c42b2b;
+  --color-success: #0d7a42;
+  --color-info-bg: #f0f5fa;
+
+  /* 타이포그래피 */
+  --font-main: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', sans-serif;
+  --font-document: 'Batang', '바탕', serif;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+
+  /* 간격 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+  --content-max-width: 880px;
+}
+
+/* ─── 리셋 ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-main);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: var(--font-main);
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: var(--font-main);
+  font-size: var(--text-base);
+  color: var(--color-text);
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }

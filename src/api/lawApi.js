@@ -300,6 +300,17 @@ export async function getOrdinanceFullText(ordinanceName) {
       })
     })
 
+    // 조문단위가 없으면 fullText에서 조문 파싱 시도
+    if (articles.length === 0) {
+      var rawText = detailDoc.querySelector('조문')?.textContent
+        || detailDoc.querySelector('본문')?.textContent
+        || detailText.replace(/<[^>]+>/g, ' ').slice(0, 5000)
+      if (rawText) {
+        articles = parseArticlesFromText(rawText)
+        console.log('[lawApi] 텍스트 파싱으로 조문 추출:', articles.length, '조')
+      }
+    }
+
     // 전체 텍스트 조합 (AI 전달용)
     var fullText
     if (articles.length === 0) {
@@ -381,4 +392,63 @@ function parseItemsFromText(text) {
   }
 
   return { content: mainContent, items: items }
+}
+
+/**
+ * 전체 텍스트에서 조문(제○조) 단위로 파싱
+ * 조문단위 XML이 없을 때 fallback으로 사용
+ */
+function parseArticlesFromText(text) {
+  if (!text) return []
+
+  var articles = []
+  // "제1조", "제2조" 등으로 분리
+  var parts = text.split(/(?=제\d+조)/)
+
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i].trim()
+    if (!part) continue
+
+    // 조문 번호와 제목 추출: "제1조(목적)" 또는 "제1조 목적"
+    var headerMatch = part.match(/^제(\d+)조(?:\(([^)]+)\)|\s+)?/)
+    if (!headerMatch) continue
+
+    var joNum = '제' + headerMatch[1] + '조'
+    var joTitle = headerMatch[2] || ''
+
+    // 나머지 내용
+    var bodyStart = part.indexOf(')') > -1 && part.indexOf(')') < 30
+      ? part.indexOf(')') + 1
+      : part.indexOf('조') + 1
+    var body = part.slice(bodyStart).trim()
+
+    // 항 분리: ① ② ③ 등
+    var hangParts = body.split(/(?=[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])/)
+    var paragraphs = []
+
+    if (hangParts.length > 1 || (hangParts.length === 1 && hangParts[0].match(/^[①②③④⑤⑥⑦⑧⑨⑩]/))) {
+      // 항이 있는 경우
+      for (var h = 0; h < hangParts.length; h++) {
+        var hangText = hangParts[h].trim()
+        if (!hangText) continue
+        // 원문자 제거
+        hangText = hangText.replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*/, '')
+        var parsed = parseItemsFromText(hangText)
+        paragraphs.push(parsed)
+      }
+    } else {
+      // 항 없이 조문 내용만 있는 경우
+      var parsed2 = parseItemsFromText(body)
+      paragraphs.push(parsed2)
+    }
+
+    articles.push({
+      number: joNum,
+      title: joTitle,
+      content: body.split('\n')[0] || body.slice(0, 200),
+      paragraphs: paragraphs,
+    })
+  }
+
+  return articles
 }

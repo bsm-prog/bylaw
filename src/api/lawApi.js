@@ -463,6 +463,3 @@ function parseArticlesFromText(text) {
 
   return articles
 }
-
-  return articles
-}

@@ -135,94 +135,124 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
 
   var hasRefs = data.selectedRefs && data.selectedRefs.length > 0
 
-  /* ─── 일부개정/전부개정: 대상 조례 원문 자동 로드 ─── */
-  var _autoLoaded = useState(false)
-  var autoLoaded = _autoLoaded[0]
-  var setAutoLoaded = _autoLoaded[1]
 
-  var _autoLoading = useState(false)
-  var autoLoading = _autoLoading[0]
-  var setAutoLoading = _autoLoading[1]
+  var isAmend = data.type === '일부개정'
+    || data.type === '전부개정'
 
-  useEffect(function() {
-    var isAmend = data.type === '일부개정'
-      || data.type === '전부개정'
-    if (!isAmend) return
-    if (autoLoaded) return
-    if (!data.targetOrdinance) return
-    if (articles.length > 0) {
-      setAutoLoaded(true)
+  var _origLoading = useState(false)
+  var origLoading = _origLoading[0]
+  var setOrigLoading = _origLoading[1]
+
+  var _origLoaded = useState(
+    (data.originalArticles || []).length > 0
+  )
+  var origLoaded = _origLoaded[0]
+  var setOrigLoaded = _origLoaded[1]
+
+  /* 원본 API 응답을 에디터 형식으로 변환 */
+  function convertToEditorFormat(srcArticles) {
+    return srcArticles.map(function(a, i) {
+      var paras = (a.paragraphs || []).map(function(p) {
+        var items = (p.items || []).map(function(item) {
+          var subs = (item.subItems || []).map(
+            function(sub) {
+              return mkSubItem(sub.content || '')
+            }
+          )
+          var it = mkItem(item.content || '')
+          it.subItems = subs
+          return it
+        })
+        var pa = mkPara(p.content || '')
+        pa.items = items
+        return pa
+      })
+      if (paras.length === 0) {
+        paras = [mkPara(a.content || '')]
+      }
+      return {
+        id: uid(),
+        number: i + 1,
+        title: a.title || '',
+        paragraphs: paras,
+      }
+    })
+  }
+
+  /* ─── 원본 불러오기 (일부개정용) ─── */
+  var handleLoadOriginal = async function() {
+    if (!data.targetOrdinance) {
+      alert('대상 조례가 선택되지 않았습니다.')
       return
     }
-
     var targetName = data.targetOrdinance.name
     if (!targetName) return
 
-    setAutoLoading(true)
-    setAutoLoaded(true)
-    console.log('[Step2] 대상 조례 원문 자동 로드:', targetName)
+    setOrigLoading(true)
+    console.log('[Step2] 원본 불러오기:', targetName)
 
-    getOrdinanceFullText(targetName).then(function(fullText) {
+    try {
+      var fullText = await getOrdinanceFullText(
+        targetName
+      )
       if (!fullText) {
-        console.warn('[Step2] 대상 조례 원문 조회 실패')
-        setAutoLoading(false)
+        alert('원문 조회에 실패했습니다.')
+        setOrigLoading(false)
         return
       }
-      console.log('[Step2] 대상 조례 원문 로드 완료:',
-        'articles:', (fullText.articles || []).length,
-        'fullText길이:', (fullText.fullText || '').length)
+      console.log('[Step2] 원본 로드 완료:',
+        (fullText.articles || []).length, '조,',
+        (fullText.fullText || '').length, '자')
 
       var srcArticles = fullText.articles || []
       if (srcArticles.length === 0 && fullText.fullText) {
-        srcArticles = parseFullTextToArticles(fullText.fullText)
+        srcArticles = parseFullTextToArticles(
+          fullText.fullText
+        )
       }
       if (srcArticles.length === 0) {
-        console.warn('[Step2] 조문 파싱 결과 없음')
-        setAutoLoading(false)
+        alert('조문을 파싱할 수 없습니다.')
+        setOrigLoading(false)
         return
       }
 
-      /* 원본 조문을 에디터 형식으로 변환 */
-      var editorArticles = srcArticles.map(function(a, i) {
-        var paras = (a.paragraphs || []).map(function(p) {
-          var items = (p.items || []).map(function(item) {
-            var subs = (item.subItems || []).map(function(sub) {
-              return mkSubItem(sub.content || '')
-            })
-            var it = mkItem(item.content || '')
-            it.subItems = subs
-            return it
-          })
-          var pa = mkPara(p.content || '')
-          pa.items = items
-          return pa
-        })
-        if (paras.length === 0) {
-          paras = [mkPara(a.content || '')]
-        }
-        return {
-          id: uid(),
-          number: i + 1,
-          title: a.title || '',
-          paragraphs: paras,
-        }
-      })
+      var editorArticles = convertToEditorFormat(
+        srcArticles
+      )
 
-      /* 원본 보존 (Step5 신구대비표용) */
-      onUpdate('originalArticles', editorArticles.map(
-        function(a) { return JSON.parse(JSON.stringify(a)) }
-      ))
-      /* 편집용 세팅 */
-      sync(editorArticles)
+      /* 원본 보존 (Step5 구조문용) */
+      var deepCopy = JSON.parse(
+        JSON.stringify(editorArticles)
+      )
+      onUpdate('originalArticles', deepCopy)
+      setOrigLoaded(true)
+
+      /* 편집용 세팅 (아직 조문이 없을 때만) */
+      if (articles.length === 0) {
+        sync(editorArticles)
+      }
       setAiStatus('loaded')
-      setAutoLoading(false)
-      console.log('[Step2] 대상 조례 자동 로드 완료:',
+      console.log('[Step2] 원본 저장 완료:',
         editorArticles.length, '조')
-    }).catch(function(err) {
-      console.warn('[Step2] 자동 로드 오류:', err.message)
-      setAutoLoading(false)
-    })
-  }, [])
+    } catch (err) {
+      console.warn('[Step2] 원본 로드 오류:', err)
+      alert('원본 로드 중 오류: ' + err.message)
+    } finally {
+      setOrigLoading(false)
+    }
+  }
+
+  /* ─── 저장하기 ─── */
+  var _saved = useState(false)
+  var saved = _saved[0]
+  var setSaved = _saved[1]
+
+  var handleSave = function() {
+    onUpdate('articles', articles)
+    setSaved(true)
+    setTimeout(function() { setSaved(false) }, 2000)
+    console.log('[Step2] 조문 저장:', articles.length, '조')
+  }
 
   /* ─── fullText에서 조문(제○조) 파싱 (자체 내장) ─── */
   function parseFullTextToArticles(text) {
@@ -644,7 +674,7 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
             대상 조례 원문을 불러왔습니다. 수정하여 개정안을 작성하세요.
           </p>
         )}
-        {autoLoading && (
+        {origLoading && (
           <p style={{color: '#8e44ad', fontSize: '13px', marginTop: '8px'}}>
             대상 조례 원문을 불러오는 중...
           </p>
@@ -735,9 +765,43 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         </div>
       )}
 
-      {/* 다음 단계 */}
+
+      {/* 저장·다음 단계 */}
       <div className="step-footer">
-        <button className="btn btn-primary" onClick={onNext}>STEP 3로</button>
+        {isAmend && !origLoaded && (
+          <button
+            className="btn btn-outline"
+            onClick={handleLoadOriginal}
+            disabled={origLoading}
+            style={{marginRight: 8}}>
+            {origLoading
+              ? '원본 불러오는 중...'
+              : '원본 불러오기 (구조문)'}
+          </button>
+        )}
+        {isAmend && origLoaded && (
+          <span style={{
+            color: '#27ae60',
+            fontSize: 13,
+            marginRight: 12
+          }}>
+            원본(구조문) 저장됨
+          </span>
+        )}
+        <button
+          className="btn btn-outline"
+          onClick={handleSave}
+          style={{marginRight: 8}}>
+          {saved ? '저장됨!' : '저장하기'}
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={function() {
+            handleSave()
+            onNext()
+          }}>
+          저장 후 STEP 3로
+        </button>
       </div>
     </div>
   )

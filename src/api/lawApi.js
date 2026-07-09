@@ -220,6 +220,8 @@ export async function testConnection() {
 export async function getOrdinanceFullText(ordinanceName) {
   try {
     console.log('[lawApi] 조례 원문 조회:', ordinanceName)
+
+    // 1단계: 검색으로 일련번호·자치단체명 확보
     var apiUrl = buildUrl({
       target: 'ordin',
       query: ordinanceName,
@@ -228,95 +230,92 @@ export async function getOrdinanceFullText(ordinanceName) {
     var text = await fetchViaProxy(apiUrl)
     var doc = parseXML(text)
 
-    // 조례 일련번호 추출
     var serial = doc.querySelector('자치법규일련번호')
     if (!serial || !serial.textContent) {
       console.warn('[lawApi] 조례 일련번호를 찾을 수 없음')
       return null
     }
 
-    // 자치단체명 추출
     var orgName = doc.querySelector('자치단체명')?.textContent || ''
+    var serialNum = serial.textContent
+    console.log('[lawApi] 일련번호:', serialNum, ', 자치단체:', orgName)
 
-    // 본문 조회 API
-    var detailUrl = 'https://www.law.go.kr/DRF/lawService.do'
+    // 2단계: HTML 모바일 본문 조회 (자치법규는 HTML이 가장 완전)
+    var htmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
       + '?OC=' + OC
       + '&target=ordin'
-      + '&type=XML'
-      + '&ID=' + serial.textContent
+      + '&type=HTML'
+      + '&mobileYn=Y'
+      + '&ID=' + serialNum
 
-    var detailText = await fetchViaProxy(detailUrl)
-    var detailDoc = parseXML(detailText)
+    var htmlText = await fetchViaProxy(htmlUrl)
+    console.log('[lawApi] HTML 본문 응답 길이:', htmlText.length)
 
-    // 조문 추출 (항·호·목 포함)
-    var articles = []
-    detailDoc.querySelectorAll('조문단위').forEach(function(jo) {
-      var joNum = jo.querySelector('조문번호')?.textContent || ''
-      var joTitle = jo.querySelector('조문제목')?.textContent || ''
-      var joContent = jo.querySelector('조문내용')?.textContent || ''
+    // HTML에서 텍스트 추출 (브라우저 DOMParser 활용)
+    var htmlDoc = new DOMParser().parseFromString(htmlText, 'text/html')
 
-      // 항 추출 (호·목 포함)
-      var paragraphs = []
-      var hangElements = jo.querySelectorAll('항')
-      hangElements.forEach(function(hang) {
-        var hangContent = hang.querySelector('항내용')?.textContent || ''
-
-        // 호 추출
-        var items = []
-        hang.querySelectorAll('호').forEach(function(ho) {
-          var hoContent = ho.querySelector('호내용')?.textContent || ''
-
-          // 목 추출
-          var subItems = []
-          ho.querySelectorAll('목').forEach(function(mok) {
-            var mokContent = mok.querySelector('목내용')?.textContent || ''
-            if (mokContent) {
-              subItems.push({ content: mokContent })
-            }
-          })
-
-          if (hoContent) {
-            items.push({ content: hoContent, subItems: subItems })
-          }
-        })
-
-        paragraphs.push({
-          content: hangContent,
-          items: items,
-        })
-      })
-
-      // 항이 XML에 없으면 조문내용에서 호를 텍스트 파싱
-      if (paragraphs.length === 0 && joContent) {
-        var parsed = parseItemsFromText(joContent)
-        paragraphs.push(parsed)
-      }
-
-      articles.push({
-        number: joNum,
-        title: joTitle,
-        content: joContent,
-        paragraphs: paragraphs,
-      })
+    // 본문 텍스트 추출: <br> → \n 변환 후 텍스트
+    var bodyEl = htmlDoc.body || htmlDoc.documentElement
+    // <br> 태그를 줄바꿈으로 치환
+    bodyEl.querySelectorAll('br').forEach(function(br) {
+      br.replaceWith('\n')
     })
+    var rawText = (bodyEl.textContent || bodyEl.innerText || '').trim()
+    console.log('[lawApi] HTML 텍스트 추출 길이:', rawText.length)
 
-    // 조문단위가 없으면 fullText에서 조문 파싱 시도
+    // 3단계: 텍스트에서 조문 파싱
+    var articles = parseArticlesFromText(rawText)
+    console.log('[lawApi] 조문 파싱 결과:', articles.length, '조')
+
+    // 4단계: XML 방식도 시도 (혹시 XML이 더 나은 경우 대비)
     if (articles.length === 0) {
-      var rawText = detailDoc.querySelector('조문')?.textContent
-        || detailDoc.querySelector('본문')?.textContent
-        || detailText.replace(/<[^>]+>/g, ' ').slice(0, 5000)
-      if (rawText) {
-        articles = parseArticlesFromText(rawText)
-        console.log('[lawApi] 텍스트 파싱으로 조문 추출:', articles.length, '조')
-      }
+      console.log('[lawApi] HTML 파싱 실패, XML 시도')
+      var xmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
+        + '?OC=' + OC
+        + '&target=ordin'
+        + '&type=XML'
+        + '&ID=' + serialNum
+
+      var xmlText = await fetchViaProxy(xmlUrl)
+      var xmlDoc = parseXML(xmlText)
+
+      xmlDoc.querySelectorAll('조문단위').forEach(function(jo) {
+        var joNum = jo.querySelector('조문번호')?.textContent || ''
+        var joTitle = jo.querySelector('조문제목')?.textContent || ''
+        var joContent = jo.querySelector('조문내용')?.textContent || ''
+
+        var paragraphs = []
+        jo.querySelectorAll('항').forEach(function(hang) {
+          var hangContent = hang.querySelector('항내용')?.textContent || ''
+          var items = []
+          hang.querySelectorAll('호').forEach(function(ho) {
+            var hoContent = ho.querySelector('호내용')?.textContent || ''
+            var subItems = []
+            ho.querySelectorAll('목').forEach(function(mok) {
+              var mokContent = mok.querySelector('목내용')?.textContent || ''
+              if (mokContent) subItems.push({ content: mokContent })
+            })
+            if (hoContent) items.push({ content: hoContent, subItems: subItems })
+          })
+          paragraphs.push({ content: hangContent, items: items })
+        })
+
+        if (paragraphs.length === 0 && joContent) {
+          paragraphs.push(parseItemsFromText(joContent))
+        }
+
+        articles.push({
+          number: joNum, title: joTitle, content: joContent,
+          paragraphs: paragraphs,
+        })
+      })
+      console.log('[lawApi] XML 파싱 결과:', articles.length, '조')
     }
 
     // 전체 텍스트 조합 (AI 전달용)
     var fullText
     if (articles.length === 0) {
-      fullText = detailDoc.querySelector('조문')?.textContent
-        || detailDoc.querySelector('본문')?.textContent
-        || detailText.replace(/<[^>]+>/g, ' ').slice(0, 3000)
+      fullText = rawText || ''
     } else {
       fullText = articles.map(function(a) {
         var line = a.number + (a.title ? '(' + a.title + ')' : '') + ' ' + a.content
@@ -334,7 +333,7 @@ export async function getOrdinanceFullText(ordinanceName) {
       }).join('\n\n')
     }
 
-    console.log('[lawApi] 조례 원문 추출 완료:', articles.length, '조')
+    console.log('[lawApi] 조례 원문 추출 완료:', articles.length, '조, fullText 길이:', fullText.length)
 
     return {
       name: ordinanceName,

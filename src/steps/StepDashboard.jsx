@@ -35,6 +35,7 @@ export default function StepDashboard({ config, searchData, selectedRefs, onBack
     leadMember: '',
     coMembers: [],
     articles: [],
+    originalArticles: [],
     supplements: [{ id: 'sup-1', content: '이 조례는 공포한 날부터 시행한다.' }],
     reason: '',
     mainContent: '',
@@ -128,9 +129,19 @@ export default function StepDashboard({ config, searchData, selectedRefs, onBack
 function StepPlaceholder({ step, label, onNext }) {
   return (
     <div className="step-placeholder">
-      <h2 className="step-title">STEP {step}. {label}</h2>
-      <p style={{ color: '#999', marginTop: 16 }}>이 화면은 다음 작업에서 구현됩니다.</p>
-      {onNext && <button className="btn btn-outline" onClick={onNext} style={{ marginTop: 16 }}>다음 단계로</button>}
+      <h2 className="step-title">
+        STEP {step}. {label}
+      </h2>
+      <p style={{ color: '#999', marginTop: 16 }}>
+        이 화면은 다음 작업에서 구현됩니다.
+      </p>
+      {onNext && (
+        <button className="btn btn-outline"
+          onClick={onNext}
+          style={{ marginTop: 16 }}>
+          다음 단계로
+        </button>
+      )}
     </div>
   )
 }

@@ -238,18 +238,32 @@ export async function getOrdinanceFullText(ordinanceName) {
 
     var orgName = doc.querySelector('자치단체명')?.textContent || ''
     var serialNum = serial.textContent
-    console.log('[lawApi] 일련번호:', serialNum, ', 자치단체:', orgName)
+    console.log('[lawApi] 일련번호(MST):', serialNum, ', 자치단체:', orgName)
 
-    // 2단계: HTML 모바일 본문 조회 (자치법규는 HTML이 가장 완전)
+    // 2단계: HTML 모바일 본문 조회
+    // 자치법규일련번호는 MST(마스터번호)에 해당 (ID가 아님!)
     var htmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
       + '?OC=' + OC
       + '&target=ordin'
       + '&type=HTML'
       + '&mobileYn=Y'
-      + '&ID=' + serialNum
+      + '&MST=' + serialNum
 
     var htmlText = await fetchViaProxy(htmlUrl)
     console.log('[lawApi] HTML 본문 응답 길이:', htmlText.length)
+
+    // "일치하는 자치법규가 없습니다" 응답인 경우 ID로 재시도
+    if (htmlText.indexOf('일치하는') >= 0 && htmlText.length < 200) {
+      console.log('[lawApi] MST로 조회 실패, ID로 재시도')
+      var htmlUrl2 = 'https://www.law.go.kr/DRF/lawService.do'
+        + '?OC=' + OC
+        + '&target=ordin'
+        + '&type=HTML'
+        + '&mobileYn=Y'
+        + '&ID=' + serialNum
+      htmlText = await fetchViaProxy(htmlUrl2)
+      console.log('[lawApi] ID 재시도 응답 길이:', htmlText.length)
+    }
 
     // HTML에서 텍스트 추출 (브라우저 DOMParser 활용)
     var htmlDoc = new DOMParser().parseFromString(htmlText, 'text/html')
@@ -274,7 +288,7 @@ export async function getOrdinanceFullText(ordinanceName) {
         + '?OC=' + OC
         + '&target=ordin'
         + '&type=XML'
-        + '&ID=' + serialNum
+        + '&MST=' + serialNum
 
       var xmlText = await fetchViaProxy(xmlUrl)
       var xmlDoc = parseXML(xmlText)
@@ -430,13 +444,11 @@ function parseArticlesFromText(text) {
       for (var h = 0; h < hangParts.length; h++) {
         var hangText = hangParts[h].trim()
         if (!hangText) continue
-        // 원문자 제거
         hangText = hangText.replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*/, '')
         var parsed = parseItemsFromText(hangText)
         paragraphs.push(parsed)
       }
     } else {
-      // 항 없이 조문 내용만 있는 경우
       var parsed2 = parseItemsFromText(body)
       paragraphs.push(parsed2)
     }
@@ -445,6 +457,13 @@ function parseArticlesFromText(text) {
       number: joNum,
       title: joTitle,
       content: body.split('\n')[0] || body.slice(0, 200),
+      paragraphs: paragraphs,
+    })
+  }
+
+  return articles
+}
+dy.slice(0, 200),
       paragraphs: paragraphs,
     })
   }

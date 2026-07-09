@@ -3,21 +3,21 @@
  * Cloudflare Worker 프록시를 통해 CORS 우회
  */
 
-const PROXY_BASE = 'https://lawgill.papy98.workers.dev'
-const OC = 'bitsam24'
-const API_BASE = 'https://www.law.go.kr/DRF/lawSearch.do'
+var PROXY_BASE = 'https://lawgill.papy98.workers.dev'
+var OC = 'bitsam24'
+var API_BASE = 'https://www.law.go.kr/DRF/lawSearch.do'
 
-const ORG_GYEONGGI = '6410000'
+var ORG_GYEONGGI = '6410000'
 
 /**
  * 프록시를 통한 API 호출
  */
 async function fetchViaProxy(apiUrl) {
-  const proxyUrl = PROXY_BASE + '/?url=' + encodeURIComponent(apiUrl)
+  var proxyUrl = PROXY_BASE + '/?url=' + encodeURIComponent(apiUrl)
   console.log('[lawApi] 호출:', apiUrl)
-  const res = await fetch(proxyUrl)
+  var res = await fetch(proxyUrl)
   if (!res.ok) throw new Error('API 요청 실패: ' + res.status)
-  const text = await res.text()
+  var text = await res.text()
   console.log('[lawApi] 응답 길이:', text.length)
   return text
 }
@@ -26,8 +26,8 @@ async function fetchViaProxy(apiUrl) {
  * XML 파싱 (브라우저 DOMParser 활용)
  */
 function parseXML(xmlText) {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xmlText, 'text/xml')
+  var parser = new DOMParser()
+  var doc = parser.parseFromString(xmlText, 'text/xml')
   return doc
 }
 
@@ -35,9 +35,9 @@ function parseXML(xmlText) {
  * 자치법규 검색 결과 추출
  */
 function extractOrdinItems(xmlText) {
-  const doc = parseXML(xmlText)
-  const totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
-  const items = []
+  var doc = parseXML(xmlText)
+  var totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
+  var items = []
 
   doc.querySelectorAll('law').forEach(function(law) {
     var name = law.querySelector('자치법규명')
@@ -60,19 +60,18 @@ function extractOrdinItems(xmlText) {
   })
 
   console.log('[lawApi] 자치법규 추출:', items.length, '건')
-  return { totalCnt: parseInt(totalCnt), items }
+  return { totalCnt: parseInt(totalCnt), items: items }
 }
 
 /**
  * 법령 검색 결과 추출
  */
 function extractLawItems(xmlText) {
-  const doc = parseXML(xmlText)
-  const totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
-  const items = []
+  var doc = parseXML(xmlText)
+  var totalCnt = doc.querySelector('totalCnt')?.textContent || '0'
+  var items = []
 
   doc.querySelectorAll('law').forEach(function(law) {
-    // 여러 가능한 태그명 시도
     var name = law.querySelector('법령명한글') || law.querySelector('법령명')
     var id = law.querySelector('법령ID') || law.querySelector('법령아이디')
     var mst = law.querySelector('법령일련번호') || law.querySelector('법령MST')
@@ -92,7 +91,7 @@ function extractLawItems(xmlText) {
   })
 
   console.log('[lawApi] 법령 추출:', items.length, '건')
-  return { totalCnt: parseInt(totalCnt), items }
+  return { totalCnt: parseInt(totalCnt), items: items }
 }
 
 /**
@@ -153,7 +152,6 @@ export async function searchOtherRegionOrdinances(query, display) {
   var text = await fetchViaProxy(apiUrl)
   var result = extractOrdinItems(text)
 
-  // 경기도 제외만 적용 (광역/기초 모두 포함)
   result.items = result.items.filter(function(item) {
     return item.org.indexOf('경기도') === -1
   })
@@ -217,7 +215,7 @@ export async function testConnection() {
 
 /**
  * 조례 원문(전문) 조회
- * 조례명으로 검색 후 본문 텍스트 추출
+ * 항·호·목까지 구조화하여 반환
  */
 export async function getOrdinanceFullText(ordinanceName) {
   try {
@@ -237,6 +235,9 @@ export async function getOrdinanceFullText(ordinanceName) {
       return null
     }
 
+    // 자치단체명 추출
+    var orgName = doc.querySelector('자치단체명')?.textContent || ''
+
     // 본문 조회 API
     var detailUrl = 'https://www.law.go.kr/DRF/lawService.do'
       + '?OC=' + OC
@@ -247,54 +248,86 @@ export async function getOrdinanceFullText(ordinanceName) {
     var detailText = await fetchViaProxy(detailUrl)
     var detailDoc = parseXML(detailText)
 
-    // 조문 추출
+    // 조문 추출 (항·호·목 포함)
     var articles = []
     detailDoc.querySelectorAll('조문단위').forEach(function(jo) {
       var joNum = jo.querySelector('조문번호')?.textContent || ''
       var joTitle = jo.querySelector('조문제목')?.textContent || ''
       var joContent = jo.querySelector('조문내용')?.textContent || ''
 
-      // 항 추출
-      var hangs = []
-      jo.querySelectorAll('항').forEach(function(hang) {
+      // 항 추출 (호·목 포함)
+      var paragraphs = []
+      var hangElements = jo.querySelectorAll('항')
+      hangElements.forEach(function(hang) {
         var hangContent = hang.querySelector('항내용')?.textContent || ''
-        hangs.push(hangContent)
+
+        // 호 추출
+        var items = []
+        hang.querySelectorAll('호').forEach(function(ho) {
+          var hoContent = ho.querySelector('호내용')?.textContent || ''
+
+          // 목 추출
+          var subItems = []
+          ho.querySelectorAll('목').forEach(function(mok) {
+            var mokContent = mok.querySelector('목내용')?.textContent || ''
+            if (mokContent) {
+              subItems.push({ content: mokContent })
+            }
+          })
+
+          if (hoContent) {
+            items.push({ content: hoContent, subItems: subItems })
+          }
+        })
+
+        paragraphs.push({
+          content: hangContent,
+          items: items,
+        })
       })
+
+      // 항이 XML에 없으면 조문내용에서 호를 텍스트 파싱
+      if (paragraphs.length === 0 && joContent) {
+        var parsed = parseItemsFromText(joContent)
+        paragraphs.push(parsed)
+      }
 
       articles.push({
         number: joNum,
         title: joTitle,
         content: joContent,
-        paragraphs: hangs,
+        paragraphs: paragraphs,
       })
     })
 
-    // 조문이 없으면 전체 텍스트로 시도
+    // 전체 텍스트 조합 (AI 전달용)
+    var fullText
     if (articles.length === 0) {
-      var bodyText = detailDoc.querySelector('조문')?.textContent
+      fullText = detailDoc.querySelector('조문')?.textContent
         || detailDoc.querySelector('본문')?.textContent
         || detailText.replace(/<[^>]+>/g, ' ').slice(0, 3000)
-
-      return {
-        name: ordinanceName,
-        fullText: bodyText,
-        articles: [],
-      }
+    } else {
+      fullText = articles.map(function(a) {
+        var line = a.number + (a.title ? '(' + a.title + ')' : '') + ' ' + a.content
+        a.paragraphs.forEach(function(p) {
+          if (p.content) line += '\n' + p.content
+          p.items.forEach(function(item, ii) {
+            line += '\n  ' + (ii + 1) + '. ' + item.content
+            item.subItems.forEach(function(sub, si) {
+              var mokLabels = ['가','나','다','라','마','바','사','아','자','차']
+              line += '\n    ' + (mokLabels[si] || '?') + '. ' + sub.content
+            })
+          })
+        })
+        return line
+      }).join('\n\n')
     }
-
-    // 전체 텍스트 조합
-    var fullText = articles.map(function(a) {
-      var line = a.number + (a.title ? '(' + a.title + ')' : '') + ' ' + a.content
-      if (a.paragraphs.length > 0) {
-        line += '\n' + a.paragraphs.join('\n')
-      }
-      return line
-    }).join('\n\n')
 
     console.log('[lawApi] 조례 원문 추출 완료:', articles.length, '조')
 
     return {
       name: ordinanceName,
+      org: orgName,
       fullText: fullText,
       articles: articles,
     }
@@ -302,4 +335,50 @@ export async function getOrdinanceFullText(ordinanceName) {
     console.warn('[lawApi] 조례 원문 조회 실패:', err.message)
     return null
   }
+}
+
+/**
+ * 조문내용 텍스트에서 호·목 파싱 (XML에 호 태그가 없을 때 사용)
+ */
+function parseItemsFromText(text) {
+  if (!text) return { content: '', items: [] }
+
+  var lines = text.split(/\n/)
+  var mainContent = ''
+  var items = []
+  var currentItem = null
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (!line) continue
+
+    // 호 패턴: "1. ...", "2. ..." 등
+    var itemMatch = line.match(/^(\d+)\.\s*(.+)/)
+    if (itemMatch) {
+      if (currentItem) {
+        items.push(currentItem)
+      }
+      currentItem = { content: itemMatch[2], subItems: [] }
+      continue
+    }
+
+    // 목 패턴: "가. ...", "나. ..." 등
+    var mokLabels = '가나다라마바사아자차카타파하'
+    var subMatch = line.match(/^([가-하])\.\s*(.+)/)
+    if (subMatch && mokLabels.indexOf(subMatch[1]) >= 0 && currentItem) {
+      currentItem.subItems.push({ content: subMatch[2] })
+      continue
+    }
+
+    // 그 외: 본문
+    if (items.length === 0 && !currentItem) {
+      mainContent += (mainContent ? ' ' : '') + line
+    }
+  }
+
+  if (currentItem) {
+    items.push(currentItem)
+  }
+
+  return { content: mainContent, items: items }
 }

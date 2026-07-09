@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { generateArticleDraft } from '../api/aiApi'
 import { getOrdinanceFullText } from '../api/lawApi'
 
@@ -134,6 +134,95 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
   }
 
   var hasRefs = data.selectedRefs && data.selectedRefs.length > 0
+
+  /* ─── 일부개정/전부개정: 대상 조례 원문 자동 로드 ─── */
+  var _autoLoaded = useState(false)
+  var autoLoaded = _autoLoaded[0]
+  var setAutoLoaded = _autoLoaded[1]
+
+  var _autoLoading = useState(false)
+  var autoLoading = _autoLoading[0]
+  var setAutoLoading = _autoLoading[1]
+
+  useEffect(function() {
+    var isAmend = data.type === '일부개정'
+      || data.type === '전부개정'
+    if (!isAmend) return
+    if (autoLoaded) return
+    if (!data.targetOrdinance) return
+    if (articles.length > 0) {
+      setAutoLoaded(true)
+      return
+    }
+
+    var targetName = data.targetOrdinance.name
+    if (!targetName) return
+
+    setAutoLoading(true)
+    setAutoLoaded(true)
+    console.log('[Step2] 대상 조례 원문 자동 로드:', targetName)
+
+    getOrdinanceFullText(targetName).then(function(fullText) {
+      if (!fullText) {
+        console.warn('[Step2] 대상 조례 원문 조회 실패')
+        setAutoLoading(false)
+        return
+      }
+      console.log('[Step2] 대상 조례 원문 로드 완료:',
+        'articles:', (fullText.articles || []).length,
+        'fullText길이:', (fullText.fullText || '').length)
+
+      var srcArticles = fullText.articles || []
+      if (srcArticles.length === 0 && fullText.fullText) {
+        srcArticles = parseFullTextToArticles(fullText.fullText)
+      }
+      if (srcArticles.length === 0) {
+        console.warn('[Step2] 조문 파싱 결과 없음')
+        setAutoLoading(false)
+        return
+      }
+
+      /* 원본 조문을 에디터 형식으로 변환 */
+      var editorArticles = srcArticles.map(function(a, i) {
+        var paras = (a.paragraphs || []).map(function(p) {
+          var items = (p.items || []).map(function(item) {
+            var subs = (item.subItems || []).map(function(sub) {
+              return mkSubItem(sub.content || '')
+            })
+            var it = mkItem(item.content || '')
+            it.subItems = subs
+            return it
+          })
+          var pa = mkPara(p.content || '')
+          pa.items = items
+          return pa
+        })
+        if (paras.length === 0) {
+          paras = [mkPara(a.content || '')]
+        }
+        return {
+          id: uid(),
+          number: i + 1,
+          title: a.title || '',
+          paragraphs: paras,
+        }
+      })
+
+      /* 원본 보존 (Step5 신구대비표용) */
+      onUpdate('originalArticles', editorArticles.map(
+        function(a) { return JSON.parse(JSON.stringify(a)) }
+      ))
+      /* 편집용 세팅 */
+      sync(editorArticles)
+      setAiStatus('loaded')
+      setAutoLoading(false)
+      console.log('[Step2] 대상 조례 자동 로드 완료:',
+        editorArticles.length, '조')
+    }).catch(function(err) {
+      console.warn('[Step2] 자동 로드 오류:', err.message)
+      setAutoLoading(false)
+    })
+  }, [])
 
   /* ─── fullText에서 조문(제○조) 파싱 (자체 내장) ─── */
   function parseFullTextToArticles(text) {
@@ -548,6 +637,16 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         {aiStatus === 'success' && (
           <p style={{color: '#27ae60', fontSize: '13px', marginTop: '8px'}}>
             AI 조문이 성공적으로 생성되었습니다.
+          </p>
+        )}
+        {aiStatus === 'loaded' && (
+          <p style={{color: '#2980b9', fontSize: '13px', marginTop: '8px'}}>
+            대상 조례 원문을 불러왔습니다. 수정하여 개정안을 작성하세요.
+          </p>
+        )}
+        {autoLoading && (
+          <p style={{color: '#8e44ad', fontSize: '13px', marginTop: '8px'}}>
+            대상 조례 원문을 불러오는 중...
           </p>
         )}
       </div>

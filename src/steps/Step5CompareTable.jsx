@@ -40,7 +40,7 @@ export default function Step5CompareTable({ data, onUpdate, onNext, onPrev }) {
     setGenerating(true)
     try {
       const result = await generateCompareTable(
-        data.targetOrdinance?.articles || [],
+        data.originalArticles || [],
         data.articles || []
       )
       if (result && result.amendments) {
@@ -52,8 +52,15 @@ export default function Step5CompareTable({ data, onUpdate, onNext, onPrev }) {
       }
     } catch (err) {
       console.warn('AI 대비표 생성 실패:', err.message)
-      // 폴백: 샘플 데이터
-      const draft = generateMockAmendments(data)
+      // 폴백: 원본과 수정본 직접 비교
+      const origArts = data.originalArticles || []
+      const newArts = data.articles || []
+      let draft
+      if (origArts.length > 0 && newArts.length > 0) {
+        draft = compareArticlesDirect(origArts, newArts)
+      } else {
+        draft = generateMockAmendments(data)
+      }
       const newHist = [...genHistory, draft].slice(-5)
       setGenHistory(newHist)
       setGenIdx(newHist.length - 1)
@@ -79,6 +86,15 @@ export default function Step5CompareTable({ data, onUpdate, onNext, onPrev }) {
         <a href="https://www.law.go.kr" target="_blank" rel="noopener noreferrer"
           className="compare-api-link">원문 확인하기</a>
       </div>
+
+      {/* 원본 조문 상태 안내 */}
+      {(!data.originalArticles || data.originalArticles.length === 0) && (
+        <div className="compare-api-notice" style={{color: '#e67e22', borderColor: '#e67e22'}}>
+          현행 조문(원본)이 아직 로드되지 않았습니다.
+          STEP 2에서 대상 조례 원문을 불러온 후 수정하면
+          자동으로 원본이 저장됩니다.
+        </div>
+      )}
 
       {/* AI 자동 생성 */}
       <div className="compare-generate">
@@ -191,13 +207,93 @@ export default function Step5CompareTable({ data, onUpdate, onNext, onPrev }) {
 
 function generateMockAmendments(data) {
   return [
-    { id: uid(), articleRef: '제2조제3호', type: 'modify',
-      current: '"주거지원"이란 …을 말한다.',
-      proposed: '"주거지원"이란 청년 1인가구의 주거 안정을 위한 …을 말한다.' },
-    { id: uid(), articleRef: '제5조제1항', type: 'modify',
-      current: '위원회는 위원장 1명을 포함하여 10명 이내로 구성한다.',
-      proposed: '위원회는 위원장 1명을 포함하여 15명 이내로 구성한다.' },
-    { id: uid(), articleRef: '제7조의2', type: 'add',
-      current: '', proposed: '도지사는 청년 1인가구의 주거 실태를 파악하기 위하여 실태조사를 실시할 수 있다.' },
+    {
+      id: uid(),
+      articleRef: '제○조',
+      type: 'modify',
+      current: '(원본 조문이 없어 예시입니다)',
+      proposed: '(STEP 2에서 조문을 먼저 작성해 주세요)',
+    },
   ]
+}
+
+/* ─── 원본 vs 수정본 직접 비교 ─── */
+function artText(art) {
+  if (!art || !art.paragraphs) return ''
+  return art.paragraphs.map(function(p) {
+    var t = p.content || ''
+    if (p.items) {
+      p.items.forEach(function(item, ii) {
+        t += '\n  ' + (ii+1) + '. '
+        t += (item.content || '')
+        if (item.subItems) {
+          item.subItems.forEach(function(sub) {
+            t += '\n    ' + (sub.content || '')
+          })
+        }
+      })
+    }
+    return t
+  }).join('\n')
+}
+
+function compareArticlesDirect(origArts, newArts) {
+  var amendments = []
+  var origMap = {}
+  origArts.forEach(function(a) {
+    origMap[a.number] = a
+  })
+  var newMap = {}
+  newArts.forEach(function(a) {
+    newMap[a.number] = a
+  })
+
+  origArts.forEach(function(orig) {
+    var nw = newMap[orig.number]
+    if (!nw) {
+      amendments.push({
+        id: uid(),
+        articleRef: '제' + orig.number + '조',
+        type: 'delete',
+        current: artText(orig),
+        proposed: '',
+      })
+    } else {
+      var origT = artText(orig)
+      var newT = artText(nw)
+      if (origT !== newT) {
+        amendments.push({
+          id: uid(),
+          articleRef: '제' + orig.number + '조',
+          type: 'modify',
+          current: origT,
+          proposed: newT,
+        })
+      }
+    }
+  })
+
+  newArts.forEach(function(nw) {
+    if (!origMap[nw.number]) {
+      amendments.push({
+        id: uid(),
+        articleRef: '제' + nw.number + '조',
+        type: 'add',
+        current: '',
+        proposed: artText(nw),
+      })
+    }
+  })
+
+  amendments.sort(function(a, b) {
+    var na = parseInt(
+      a.articleRef.replace(/\D/g, '')
+    ) || 0
+    var nb = parseInt(
+      b.articleRef.replace(/\D/g, '')
+    ) || 0
+    return na - nb
+  })
+
+  return amendments
 }

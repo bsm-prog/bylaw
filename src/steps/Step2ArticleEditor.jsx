@@ -233,10 +233,13 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
       console.warn('[Step2] AI 조문 생성 실패:', err.message)
 
       // 참고 조례 원문이 있으면 원문 기반으로 생성
+      var refArticles = []
       if (refTexts.length > 0) {
-        console.log('[Step2] 참고 조례 원문 기반으로 조문 생성')
+        console.log('[Step2] 참고 조례 원문 기반으로 조문 생성 시도')
+        refArticles = buildFromReference(refTexts[0])
+      }
+      if (refArticles.length > 0) {
         setAiStatus('ref-fallback')
-        var refArticles = buildFromReference(refTexts[0])
         sync(refArticles)
       } else {
         setAiStatus('fallback')

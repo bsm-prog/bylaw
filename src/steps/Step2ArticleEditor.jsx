@@ -14,6 +14,32 @@ const mkArticle = (number, title = "", content = "") => ({
   paragraphs: [mkPara(content)]
 })
 
+/* ─── AI 응답을 항·호·목 구조 그대로 변환 ─── */
+function convertAiArticle(a, idx) {
+  var paragraphs = (a.paragraphs || []).map(function(p) {
+    var items = (p.items || []).map(function(item) {
+      var subItems = (item.subItems || []).map(function(sub) {
+        return mkSubItem(sub.content || '')
+      })
+      var it = mkItem(item.content || '')
+      it.subItems = subItems
+      return it
+    })
+    var para = mkPara(p.content || '')
+    para.items = items
+    return para
+  })
+  if (paragraphs.length === 0) {
+    paragraphs = [mkPara('')]
+  }
+  return {
+    id: uid(),
+    number: idx + 1,
+    title: a.title || '',
+    paragraphs: paragraphs,
+  }
+}
+
 /* ─── 자주 쓰는 조문 템플릿 ─── */
 const TEMPLATES = {
   "총칙": [
@@ -32,7 +58,7 @@ const TEMPLATES = {
     { title: "위원회 구성", content: "위원회는 위원장과 부위원장 각 1명을 포함하여 00명 이내로 구성하고, 위원장과 부위원장은 위원 중에서 호선한다." },
     { title: "위원장의 직무", content: "위원장은 위원회를 대표하고, 위원회의 업무를 총괄한다." },
     { title: "회의 운영", content: "위원회의 회의는 위원장이 필요하다고 인정하는 때에 소집한다." },
-    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 정할 수 있다." },
+    { title: "위원의 해촉", content: "도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 있다." },
   ],
   "지원·사업": [
     { title: "지원 사업", content: "도지사는 …의 육성을 위하여 다음 각 호의 사업을 추진할 수 있다." },
@@ -97,7 +123,9 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         refTexts
       )
       if (result && result.articles) {
-        const newArticles = result.articles.map((a, i) => mkArticle(i + 1, a.title, a.paragraphs?.[0]?.content || ''))
+        const newArticles = result.articles.map(function(a, i) {
+          return convertAiArticle(a, i)
+        })
         sync(newArticles)
       }
     } catch (err) {

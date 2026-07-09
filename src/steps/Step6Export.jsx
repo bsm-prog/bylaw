@@ -222,76 +222,155 @@ export default function Step6Export({ data, onPrev }) {
   )
 }
 
+
 /* ─── 미리보기 컴포넌트 (문서 양식 순서) ─── */
 
+var CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳'
+  .split('').filter(function(c){return c})
+var MOK = [
+  '가','나','다','라','마','바','사',
+  '아','자','차','카','타','파','하'
+]
+
+/* 호·목 인라인 스타일 */
+var stHang = {paddingLeft: 16, margin: '2px 0'}
+var stHo = {paddingLeft: 36, margin: '2px 0'}
+var stMok = {paddingLeft: 56, margin: '2px 0'}
+
+function renderSubItems(subItems) {
+  if (!subItems || subItems.length === 0) return null
+  return subItems.map(function(sub, si) {
+    var label = (MOK[si] || '?') + '. '
+    return (
+      <p key={sub.id || si} style={stMok}>
+        {label}{sub.content || ''}
+      </p>
+    )
+  })
+}
+
+function renderItems(items) {
+  if (!items || items.length === 0) return null
+  return items.map(function(item, ii) {
+    return (
+      <div key={item.id || ii}>
+        <p style={stHo}>
+          {(ii + 1) + '. '}{item.content || ''}
+        </p>
+        {renderSubItems(item.subItems)}
+      </div>
+    )
+  })
+}
+
+function renderArticle(art) {
+  var artTitle = art.title
+    ? '(' + art.title + ')' : ''
+  var paras = art.paragraphs || []
+  var multi = paras.length > 1
+
+  /* 항 1개, 호 없으면 한 줄 */
+  if (paras.length <= 1) {
+    var p0 = paras[0] || {}
+    var noItems = !p0.items || p0.items.length === 0
+    if (noItems) {
+      return (
+        <p key={art.id} className="preview-doc-body">
+          <strong>
+            {'제' + art.number + '조' + artTitle}
+          </strong>{' '}
+          {p0.content || ''}
+        </p>
+      )
+    }
+  }
+
+  return (
+    <div key={art.id}
+      className="preview-doc-body"
+      style={{marginBottom: 12}}>
+      <p style={{marginBottom: 4}}>
+        <strong>
+          {'제' + art.number + '조' + artTitle}
+        </strong>
+      </p>
+      {paras.map(function(p, pi) {
+        var pfx = multi
+          ? (CIRCLED[pi] || '(' + (pi+1) + ')') + ' '
+          : ''
+        return (
+          <div key={p.id || pi} style={{marginBottom: 4}}>
+            <p style={stHang}>
+              {pfx}{p.content || ''}
+            </p>
+            {renderItems(p.items)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function BillPreview({ data, isAmendment }) {
-  const title = data.type === '제정'
+  var title = data.type === '제정'
     ? '경기도 ' + (data.title || '○○') + ' 조례안'
     : data.type === '일부개정'
-      ? '경기도 ' + (data.originalTitle || data.title || '○○') + ' 조례 일부개정조례안'
-      : '경기도 ' + (data.originalTitle || data.title || '○○') + ' 조례 전부개정조례안'
+      ? '경기도 ' + (data.originalTitle || data.title || '○○')
+        + ' 조례 일부개정조례안'
+      : '경기도 ' + (data.originalTitle || data.title || '○○')
+        + ' 조례 전부개정조례안'
 
   return (
     <div className="preview-document">
       <p className="preview-doc-title">{title}</p>
       {data.submitterType === '의원' && data.leadMember && (
-        <p className="preview-doc-sub">({data.leadMember} 의원 대표발의)</p>
+        <p className="preview-doc-sub">
+          ({data.leadMember} 의원 대표발의)
+        </p>
       )}
       <div className="preview-doc-divider" />
       <p className="preview-doc-heading">1. 제안이유</p>
-      <p className="preview-doc-body">{data.reason || '(제안이유가 작성되지 않았습니다)'}</p>
+      <p className="preview-doc-body">
+        {data.reason || '(제안이유가 작성되지 않았습니다)'}
+      </p>
       <p className="preview-doc-heading">2. 주요내용</p>
-      <p className="preview-doc-body">{data.mainContent || '(주요내용이 작성되지 않았습니다)'}</p>
+      <p className="preview-doc-body">
+        {data.mainContent || '(주요내용이 작성되지 않았습니다)'}
+      </p>
+
       {data.articles && data.articles.length > 0 && (
         <>
           <div className="preview-doc-divider" />
           <p className="preview-doc-heading">조례안</p>
-          {data.articles.map(art => (
-            <p key={art.id} className="preview-doc-body">
-              <strong>제{art.number}조({art.title || ''})</strong>{' '}
-              {art.paragraphs && art.paragraphs[0] ? art.paragraphs[0].content : ''}
-            </p>
-          ))}
+          {data.articles.map(function(art) {
+            return renderArticle(art)
+          })}
         </>
       )}
-    </div>
-  )
-}
 
-function ProposalPreview({ data }) {
-  return (
-    <div className="preview-document">
-      <p className="preview-doc-title">
-        {data.title || '○○'} 조례안
-        <br />제 안 설 명 서
-      </p>
-      {data.leadMember && <p className="preview-doc-sub">{data.leadMember} 의원</p>}
-      <div className="preview-doc-divider" />
-      <p className="preview-doc-heading">제안이유</p>
-      <p className="preview-doc-body">{data.reason || '(작성 필요)'}</p>
-      <p className="preview-doc-heading">주요내용</p>
-      <p className="preview-doc-body">{data.mainContent || '(작성 필요)'}</p>
-    </div>
-  )
-}
-
-function NoticePreview({ data }) {
-  return (
-    <div className="preview-document">
-      <p className="preview-doc-sub">경기도의회 공고 제0000-000호</p>
-      <p className="preview-doc-title">경기도 자치법규안 입법예고</p>
-      <div className="preview-doc-divider" />
-      <p className="preview-doc-heading">1. 제정이유</p>
-      <p className="preview-doc-body">{data.reason || '(작성 필요)'}</p>
-      <p className="preview-doc-heading">2. 주요내용</p>
-      <p className="preview-doc-body">{data.mainContent || '(작성 필요)'}</p>
-      <p className="preview-doc-heading">3. 조례안 : 붙임</p>
-      <p className="preview-doc-heading">4. 의견제출</p>
-      <p className="preview-doc-body">
-        제출기한 : 0000년 0월 0일까지
-        <br />제출방법 : 서면·우편·인터넷·경기도의회 홈페이지
-        <br />제출기관 : 경기도의회사무처(입법정책담당관실)
-      </p>
+      {data.supplements && data.supplements.length > 0 && (
+        <>
+          <div className="preview-doc-divider" />
+          <p className="preview-doc-heading"
+            style={{textAlign: 'center'}}>
+            부 칙
+          </p>
+          {data.supplements.length === 1 ? (
+            <p className="preview-doc-body">
+              {data.supplements[0].content}
+            </p>
+          ) : (
+            data.supplements.map(function(s, i) {
+              return (
+                <p key={s.id || i}
+                  className="preview-doc-body">
+                  {'제' + (i+1) + '조 '}{s.content}
+                </p>
+              )
+            })
+          )}
+        </>
+      )}
     </div>
   )
 }

@@ -135,13 +135,64 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
 
   var hasRefs = data.selectedRefs && data.selectedRefs.length > 0
 
+  /* ─── fullText에서 조문(제○조) 파싱 (자체 내장) ─── */
+  function parseFullTextToArticles(text) {
+    if (!text) return []
+    var result = []
+    var parts = text.split(/(?=제\d+조)/)
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i].trim()
+      if (!part) continue
+      var hm = part.match(/^제(\d+)조(?:\(([^)]+)\))?\s*/)
+      if (!hm) continue
+      var body = part.slice(part.indexOf(hm[0]) + hm[0].length).trim()
+      // 항 분리 (①②③)
+      var hangParts = body.split(/(?=[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])/)
+      var paragraphs = []
+      for (var h = 0; h < hangParts.length; h++) {
+        var ht = hangParts[h].trim()
+        if (!ht) continue
+        ht = ht.replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*/, '')
+        // 호·목 파싱
+        var lines = ht.split(/\n/)
+        var mainContent = ''
+        var items = []
+        var curItem = null
+        for (var li = 0; li < lines.length; li++) {
+          var ln = lines[li].trim()
+          if (!ln) continue
+          var im = ln.match(/^(\d+)\.\s*(.+)/)
+          if (im) {
+            if (curItem) items.push(curItem)
+            curItem = { content: im[2], subItems: [] }
+            continue
+          }
+          var sm = ln.match(/^([가-하])\.\s*(.+)/)
+          if (sm && curItem) {
+            curItem.subItems.push({ content: sm[2] })
+            continue
+          }
+          if (items.length === 0 && !curItem) {
+            mainContent += (mainContent ? ' ' : '') + ln
+          }
+        }
+        if (curItem) items.push(curItem)
+        paragraphs.push({ content: mainContent, items: items })
+      }
+      if (paragraphs.length === 0) paragraphs.push({ content: body, items: [] })
+      result.push({ number: '제' + hm[1] + '조', title: hm[2] || '', content: body.split('\n')[0], paragraphs: paragraphs })
+    }
+    return result
+  }
+
   /* ─── 참고 조례 원문 기반 조문 생성 (지자체명 → 경기도 치환) ─── */
   function buildFromReference(refData) {
     var orgName = refData.org || ''
-    // 지자체장 직함 추출: "○○시장", "○○군수", "○○구청장", "○○도지사" 등
+    console.log('[Step2] buildFromReference 시작. org:', orgName, ', articles:', (refData.articles || []).length, ', fullText길이:', (refData.fullText || '').length)
+
+    // 지자체장 직함 치환 패턴
     var headPatterns = []
     if (orgName) {
-      // "광양시" → "광양시장", "서울특별시" → "서울특별시장" 등
       if (orgName.match(/시$/)) headPatterns.push([orgName + '장', '도지사'])
       else if (orgName.match(/군$/)) headPatterns.push([orgName + '수', '도지사'])
       else if (orgName.match(/구$/)) headPatterns.push([orgName + '청장', '도지사'])
@@ -152,16 +203,27 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
     function replaceOrg(text) {
       if (!text || !orgName) return text || ''
       var result = text
-      // 지자체장 직함 먼저 치환 (시장→도지사 등)
       for (var i = 0; i < headPatterns.length; i++) {
         result = result.split(headPatterns[i][0]).join(headPatterns[i][1])
       }
-      // 지자체명 치환 (광양시→경기도)
       result = result.split(orgName).join('경기도')
       return result
     }
 
-    var refArticles = (refData.articles || []).map(function(a, idx) {
+    // 소스 조문: API articles → 없으면 fullText 파싱
+    var srcArticles = refData.articles || []
+    if (srcArticles.length === 0 && refData.fullText) {
+      console.log('[Step2] articles 비어있음 → fullText에서 조문 파싱 시도')
+      srcArticles = parseFullTextToArticles(refData.fullText)
+      console.log('[Step2] fullText 파싱 결과:', srcArticles.length, '조')
+    }
+
+    if (srcArticles.length === 0) {
+      console.warn('[Step2] 참고 조례에서 조문을 추출하지 못함')
+      return []
+    }
+
+    var refArticles = srcArticles.map(function(a, idx) {
       var paragraphs = (a.paragraphs || []).map(function(p) {
         var items = (p.items || []).map(function(item) {
           var subItems = (item.subItems || []).map(function(sub) {
@@ -176,7 +238,6 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         return para
       })
 
-      // paragraphs가 없으면 조문내용(content)에서 생성
       if (paragraphs.length === 0 && a.content) {
         paragraphs = [mkPara(replaceOrg(a.content))]
       }
@@ -209,7 +270,9 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
           var fullText = await getOrdinanceFullText(ref.name)
           if (fullText) {
             refTexts.push(fullText)
-            console.log('[Step2] 원문 조회 완료:', ref.name)
+            console.log('[Step2] 원문 조회 완료:', ref.name, ', articles:', (fullText.articles || []).length, ', fullText길이:', (fullText.fullText || '').length, ', org:', fullText.org)
+          } else {
+            console.warn('[Step2] 원문 조회 실패 (null 반환):', ref.name)
           }
         }
       }
@@ -231,12 +294,14 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
       }
     } catch (err) {
       console.warn('[Step2] AI 조문 생성 실패:', err.message)
+      console.log('[Step2] refTexts 개수:', refTexts.length)
 
       // 참고 조례 원문이 있으면 원문 기반으로 생성
       var refArticles = []
       if (refTexts.length > 0) {
-        console.log('[Step2] 참고 조례 원문 기반으로 조문 생성 시도')
+        console.log('[Step2] 참고 조례 원문 기반으로 조문 생성 시도, refTexts[0].articles:', (refTexts[0].articles || []).length)
         refArticles = buildFromReference(refTexts[0])
+        console.log('[Step2] buildFromReference 결과:', refArticles.length, '조')
       }
       if (refArticles.length > 0) {
         setAiStatus('ref-fallback')
@@ -657,7 +722,7 @@ function ArticleBlock(props) {
             <div key={para.id} className="para-edit">
               <div className="para-edit-row">
                 {art.paragraphs.length > 1 && (
-                  <span className="para-edit-prefix">{CIRCLED[pi] || ('(' + (pi + 1) + ')')}</span>
+                           <span className="para-edit-prefix">{CIRCLED[pi] || ('(' + (pi + 1) + ')')}</span>
                 )}
                 <textarea
                   className="para-textarea"

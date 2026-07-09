@@ -463,10 +463,6 @@ function parseArticlesFromText(text) {
 
   return articles
 }
-dy.slice(0, 200),
-      paragraphs: paragraphs,
-    })
-  }
 
   return articles
 }

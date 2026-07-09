@@ -10,15 +10,16 @@
 const AI_PROXY_URL = 'https://bylaw.papy98.workers.dev'
 
 const MODEL = 'claude-sonnet-4-6'
-const MAX_TOKENS = 2000
+const MAX_TOKENS = 4096
 
 /**
  * Claude API 호출 (프록시 경유)
+ * maxTokens 파라미터로 함수별 토큰 제한 가능
  */
-async function callClaude(systemPrompt, userPrompt) {
+async function callClaude(systemPrompt, userPrompt, maxTokens) {
   const body = {
     model: MODEL,
-    max_tokens: MAX_TOKENS,
+    max_tokens: maxTokens || MAX_TOKENS,
     system: systemPrompt,
     messages: [
       { role: 'user', content: userPrompt }
@@ -82,6 +83,7 @@ export async function generateAnalysisReport(keywords, searchResults) {
 
 /**
  * STEP 2: 조문 초안 생성
+ * 항(paragraphs)·호(items)·목(subItems) 전체 구조를 생성
  */
 export async function generateArticleDraft(keywords, ordinanceTitle, type, reportSummary, refTexts) {
   const hasRefs = refTexts && refTexts.length > 0
@@ -89,7 +91,14 @@ export async function generateArticleDraft(keywords, ordinanceTitle, type, repor
   const system = `당신은 경기도의회 조례 입법 전문가입니다. 조례 조문을 작성합니다.
 반드시 한국어로 응답하세요. JSON 형식으로만 응답하세요.
 조문은 한국 지방자치단체 조례의 표준 형식을 따릅니다.
-${hasRefs ? '참고 조례의 원문이 제공됩니다. 해당 조례의 조문 구성, 내용, 체계를 참고하여 경기도 조례로 재작성해주세요. 단순히 지자체명만 바꾸지 말고, 경기도의 특성에 맞게 조정해주세요.' : ''}`
+
+중요: 각 조문의 하위 구조를 반드시 포함하세요.
+- "다음 각 호"라고 쓴 조문에는 반드시 items 배열에 호를 나열하세요.
+- 항이 여러 개인 조문은 paragraphs 배열에 모두 포함하세요.
+- 정의조(용어 정의)는 items에 각 용어 정의를 호로 나열하세요.
+- 위원회 구성, 사업 목록 등 열거형 조문은 반드시 items를 채우세요.
+- items가 없는 단순 조문은 items를 빈 배열 []로 두세요.
+${hasRefs ? '\n참고 조례의 원문이 제공됩니다. 해당 조례의 조문 구성, 내용, 체계를 참고하여 경기도 조례로 재작성해주세요. 참고 조례에 호(1. 2. 3.)나 목(가. 나. 다.)이 있으면 반드시 items/subItems에 포함하세요. 단순히 지자체명만 바꾸지 말고, 경기도의 특성에 맞게 조정해주세요.' : ''}`
 
   let refSection = ''
   if (hasRefs) {
@@ -106,16 +115,39 @@ ${hasRefs ? '참고 조례의 원문이 제공됩니다. 해당 조례의 조문
 배경: ${reportSummary || ''}
 ${refSection}
 
-다음 JSON 형식으로 응답해주세요:
+아래 JSON 형식을 정확히 따르세요. 특히 items와 subItems를 빠뜨리지 마세요:
 {
   "articles": [
     {
       "title": "목적",
       "paragraphs": [
         {
-          "content": "항 내용",
+          "content": "이 조례는 …에 관한 사항을 규정함을 목적으로 한다.",
+          "items": []
+        }
+      ]
+    },
+    {
+      "title": "정의",
+      "paragraphs": [
+        {
+          "content": "이 조례에서 사용하는 용어의 뜻은 다음과 같다.",
           "items": [
-            { "content": "호 내용", "subItems": [{ "content": "목 내용" }] }
+            { "content": "\"반려동물\"이란 …을 말한다.", "subItems": [] },
+            { "content": "\"동반여행\"이란 …을 말한다.", "subItems": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "세부 사업",
+      "paragraphs": [
+        {
+          "content": "도지사는 다음 각 호의 사업을 추진할 수 있다.",
+          "items": [
+            { "content": "홍보 및 마케팅", "subItems": [] },
+            { "content": "관광지도 제작 및 배포", "subItems": [] },
+            { "content": "시설 지원", "subItems": [] }
           ]
         }
       ]
@@ -123,10 +155,12 @@ ${refSection}
   ]
 }
 
-${hasRefs ? '참고 조례의 조문 구성과 내용을 적극 참고하되, 경기도 조례에 맞게 재작성해주세요.' : '일반적인 조례 구성: 목적조, 정의조, 책무조, 위원회 설치·구성·운영, 지원사업, 사업위탁, 시행규칙 순서.'}
-각 조문은 실무에서 바로 사용 가능한 수준으로 구체적으로 작성해주세요.`
+${hasRefs ? '참고 조례의 조문 구성과 내용을 적극 참고하되, 경기도 조례에 맞게 재작성해주세요. 참고 조례의 호·목 구조를 반드시 반영하세요.' : '일반적인 조례 구성: 목적조, 정의조, 책무조, 위원회 설치·구성·운영, 지원사업, 사업위탁, 시행규칙 순서.'}
+각 조문은 실무에서 바로 사용 가능한 수준으로 구체적으로 작성해주세요.
+"다음 각 호"라고 쓸 때는 반드시 items 배열에 해당 호를 모두 나열해야 합니다.`
 
-  const text = await callClaude(system, user)
+  const text = await callClaude(system, user, 8000)
+  console.log('[aiApi] AI 조문 응답 길이:', text.length)
   return JSON.parse(text.replace(/```json|```/g, '').trim())
 }
 

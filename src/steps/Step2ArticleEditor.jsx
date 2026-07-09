@@ -2,17 +2,25 @@ import { useState } from 'react'
 import { generateArticleDraft } from '../api/aiApi'
 import { getOrdinanceFullText } from '../api/lawApi'
 
-const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳".split("").filter(c=>c)
-const MOK = ["가","나","다","라","마","바","사","아","자","차","카","타","파","하"]
-const uid = () => Math.random().toString(36).slice(2, 9)
+var CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳".split("").filter(function(c){return c})
+var MOK = ["가","나","다","라","마","바","사","아","자","차","카","타","파","하"]
+var uid = function() { return Math.random().toString(36).slice(2, 9) }
 
-const mkPara = (content = "") => ({ id: uid(), content, items: [] })
-const mkItem = (content = "") => ({ id: uid(), content, subItems: [] })
-const mkSubItem = (content = "") => ({ id: uid(), content })
-const mkArticle = (number, title = "", content = "") => ({
-  id: uid(), number, title,
-  paragraphs: [mkPara(content)]
-})
+var mkPara = function(content) {
+  return { id: uid(), content: content || "", items: [] }
+}
+var mkItem = function(content) {
+  return { id: uid(), content: content || "", subItems: [] }
+}
+var mkSubItem = function(content) {
+  return { id: uid(), content: content || "" }
+}
+var mkArticle = function(number, title, content) {
+  return {
+    id: uid(), number: number, title: title || "",
+    paragraphs: [mkPara(content || "")]
+  }
+}
 
 /* ─── AI 응답을 항·호·목 구조 그대로 변환 ─── */
 function convertAiArticle(a, idx) {
@@ -40,8 +48,19 @@ function convertAiArticle(a, idx) {
   }
 }
 
+/* ─── 호·목 포함 조문 생성 헬퍼 ─── */
+function mkArticleWithItems(number, title, content, itemTexts) {
+  var items = (itemTexts || []).map(function(t) { return mkItem(t) })
+  var para = mkPara(content || '')
+  para.items = items
+  return {
+    id: uid(), number: number, title: title || '',
+    paragraphs: [para]
+  }
+}
+
 /* ─── 자주 쓰는 조문 템플릿 ─── */
-const TEMPLATES = {
+var TEMPLATES = {
   "총칙": [
     { title: "목적", content: "이 조례는 …에 관한 사항을 규정함으로써 …에 이바지함을 목적으로 한다." },
     { title: "정의", content: "이 조례에서 사용하는 용어의 뜻은 다음과 같다." },
@@ -71,35 +90,54 @@ const TEMPLATES = {
 }
 
 export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
-  const [articles, setArticles] = useState(data.articles || [])
-  const [editingId, setEditingId] = useState(null)
-  const [showTemplates, setShowTemplates] = useState(false)
-  const [aiGenerating, setAiGenerating] = useState(false)
-  const [selectedTemplates, setSelectedTemplates] = useState([])
+  var _articles = useState(data.articles || [])
+  var articles = _articles[0]
+  var setArticles = _articles[1]
 
-  const toggleTemplate = (tmpl) => {
-    setSelectedTemplates(prev => {
-      const exists = prev.find(t => t.title === tmpl.title)
-      if (exists) return prev.filter(t => t.title !== tmpl.title)
-      return [...prev, tmpl]
+  var _editingId = useState(null)
+  var editingId = _editingId[0]
+  var setEditingId = _editingId[1]
+
+  var _showTemplates = useState(false)
+  var showTemplates = _showTemplates[0]
+  var setShowTemplates = _showTemplates[1]
+
+  var _aiGenerating = useState(false)
+  var aiGenerating = _aiGenerating[0]
+  var setAiGenerating = _aiGenerating[1]
+
+  var _selectedTemplates = useState([])
+  var selectedTemplates = _selectedTemplates[0]
+  var setSelectedTemplates = _selectedTemplates[1]
+
+  var _aiStatus = useState(null)
+  var aiStatus = _aiStatus[0]
+  var setAiStatus = _aiStatus[1]
+
+  var toggleTemplate = function(tmpl) {
+    setSelectedTemplates(function(prev) {
+      var exists = prev.find(function(t) { return t.title === tmpl.title })
+      if (exists) return prev.filter(function(t) { return t.title !== tmpl.title })
+      return prev.concat([tmpl])
     })
   }
 
-  const addSelectedTemplates = () => {
+  var addSelectedTemplates = function() {
     if (selectedTemplates.length === 0) return
-    const startNum = articles.length > 0 ? Math.max(...articles.map(a => a.number)) + 1 : 1
-    const newArticles = selectedTemplates.map((tmpl, i) =>
-      mkArticle(startNum + i, tmpl.title, tmpl.content)
-    )
-    sync([...articles, ...newArticles])
+    var startNum = articles.length > 0 ? Math.max.apply(null, articles.map(function(a) { return a.number })) + 1 : 1
+    var newArticles = selectedTemplates.map(function(tmpl, i) {
+      return mkArticle(startNum + i, tmpl.title, tmpl.content)
+    })
+    sync(articles.concat(newArticles))
     setSelectedTemplates([])
     setShowTemplates(false)
   }
 
-  const hasRefs = data.selectedRefs && data.selectedRefs.length > 0
+  var hasRefs = data.selectedRefs && data.selectedRefs.length > 0
 
-  const handleAiGenerate = async () => {
+  var handleAiGenerate = async function() {
     setAiGenerating(true)
+    setAiStatus(null)
     try {
       // 참고 조례 원문 가져오기
       var refTexts = []
@@ -115,7 +153,7 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         }
       }
 
-      const result = await generateArticleDraft(
+      var result = await generateArticleDraft(
         data.keywords || [],
         data.title,
         data.type,
@@ -123,25 +161,56 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         refTexts
       )
       if (result && result.articles) {
-        const newArticles = result.articles.map(function(a, i) {
+        var newArticles = result.articles.map(function(a, i) {
           return convertAiArticle(a, i)
         })
         sync(newArticles)
+        setAiStatus('success')
+        console.log('[Step2] AI 조문 생성 성공:', newArticles.length, '조')
       }
     } catch (err) {
-      console.warn('AI 조문 생성 실패, 기본 템플릿 사용:', err.message)
-      const topic = data.title || (data.keywords || []).join(' ') || '○○'
-      const fallbackArticles = [
+      console.warn('[Step2] AI 조문 생성 실패, 기본 템플릿 사용:', err.message)
+      setAiStatus('fallback')
+      var topic = data.title || (data.keywords || []).join(' ') || '○○'
+      var fallbackArticles = [
         mkArticle(1, '목적', '이 조례는 ' + topic + '에 필요한 사항을 규정함으로써 도민의 삶의 질 향상에 이바지함을 목적으로 한다.'),
-        mkArticle(2, '정의', '이 조례에서 사용하는 용어의 뜻은 다음과 같다.'),
+        mkArticleWithItems(2, '정의', '이 조례에서 사용하는 용어의 뜻은 다음과 같다.', [
+          '"○○"이란 …을 말한다.',
+          '"○○"이란 …을 말한다.',
+          '"○○"이란 …을 말한다.',
+        ]),
         mkArticle(3, '도지사의 책무', '경기도지사(이하 "도지사"라 한다)는 ' + topic + '을 위하여 필요한 시책을 수립·시행하고, 이에 대한 행정적·재정적 지원방안을 마련하도록 노력하여야 한다.'),
-        mkArticle(4, '위원회 설치 및 기능', '도지사는 다음 각 호의 사항을 심의 또는 자문하기 위하여 경기도 ○○위원회(이하 "위원회"라 한다)를 둘 수 있다.'),
-        mkArticle(5, '위원회 구성', '위원회는 위원장과 부위원장 각 1명을 포함하여 15명 이내의 위원으로 구성하고, 위원장과 부위원장은 위원 중에서 호선한다.'),
-        mkArticle(6, '위원장의 직무', '위원장은 위원회를 대표하고, 위원회의 업무를 총괄한다.'),
-        mkArticle(7, '위원회 운영', '위원회의 회의는 위원장이 필요하다고 인정하는 때에 소집한다.'),
-        mkArticle(8, '지원 사업', '도지사는 ' + topic + '을 위하여 다음 각 호의 사업을 추진할 수 있다.'),
-        mkArticle(9, '사업의 위탁', '도지사는 제8조에 따른 사업의 효율적인 추진을 위하여 관련 법인 또는 단체 등에 「경기도 사무위탁 조례」에 따라 위탁할 수 있다.'),
-        mkArticle(10, '시행규칙', '이 조례의 시행에 관하여 필요한 사항은 규칙으로 정한다.'),
+        mkArticleWithItems(4, '기본계획 수립', '도지사는 다음 각 호의 사항을 포함하는 기본계획을 5년마다 수립·시행하여야 한다.', [
+          '기본정책 및 추진방향',
+          '민·관 협력체계 구축에 관한 사항',
+          '기반시설 구축 및 유관 산업 촉진에 관한 사항',
+          '그 밖에 도지사가 필요하다고 인정하는 사항',
+        ]),
+        mkArticleWithItems(5, '위원회 설치 및 기능', '도지사는 다음 각 호의 사항을 심의 또는 자문하기 위하여 경기도 ○○위원회(이하 "위원회"라 한다)를 둘 수 있다.', [
+          '기본계획의 수립 및 변경에 관한 사항',
+          '관련 사업의 추진에 관한 사항',
+          '관련 제도 개선에 관한 사항',
+          '그 밖에 위원장이 필요하다고 인정하는 사항',
+        ]),
+        mkArticle(6, '위원회 구성', '위원회는 위원장과 부위원장 각 1명을 포함하여 15명 이내의 위원으로 구성하고, 위원장과 부위원장은 위원 중에서 호선한다.'),
+        mkArticle(7, '위원장의 직무', '위원장은 위원회를 대표하고, 위원회의 업무를 총괄한다.'),
+        mkArticleWithItems(8, '위원의 해촉', '도지사는 위원이 다음 각 호의 어느 하나에 해당하는 경우에는 해당 위원을 해촉할 수 있다.', [
+          '심신장애로 인하여 직무를 수행할 수 없게 된 경우',
+          '직무와 관련된 비위사실이 있는 경우',
+          '직무태만, 품위손상이나 그 밖의 사유로 인하여 위원으로 적합하지 아니하다고 인정되는 경우',
+          '위원 스스로 직무를 수행하기 어렵다는 의사를 밝히는 경우',
+        ]),
+        mkArticleWithItems(9, '지원 사업', '도지사는 ' + topic + '을 위하여 다음 각 호의 사업을 추진할 수 있다.', [
+          '홍보 및 마케팅',
+          '관광지도 제작 및 배포',
+          '관련 시설 조성·정비·확충',
+          '교육프로그램 운영',
+          '관련 축제 및 행사 개최',
+          '그 밖에 도지사가 필요하다고 인정하는 사업',
+        ]),
+        mkArticle(10, '재정 지원', '도지사는 제9조에 따른 사업에 필요한 비용의 전부 또는 일부를 예산의 범위에서 지원할 수 있다.'),
+        mkArticle(11, '사업의 위탁', '도지사는 제9조에 따른 사업의 효율적인 추진을 위하여 관련 법인 또는 단체 등에 「경기도 사무위탁 조례」에 따라 위탁할 수 있다.'),
+        mkArticle(12, '시행규칙', '이 조례의 시행에 관하여 필요한 사항은 규칙으로 정한다.'),
       ]
       sync(fallbackArticles)
     } finally {
@@ -149,110 +218,160 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
     }
   }
 
-  const sync = (newArticles) => {
+  var sync = function(newArticles) {
     setArticles(newArticles)
     onUpdate('articles', newArticles)
   }
 
   /* ─── 조 조작 ─── */
-  const addArticle = (template) => {
-    const num = articles.length > 0 ? Math.max(...articles.map(a => a.number)) + 1 : 1
-    const art = template
+  var addArticle = function(template) {
+    var num = articles.length > 0 ? Math.max.apply(null, articles.map(function(a) { return a.number })) + 1 : 1
+    var art = template
       ? mkArticle(num, template.title, template.content)
       : mkArticle(num)
-    sync([...articles, art])
+    sync(articles.concat([art]))
     setEditingId(art.id)
     setShowTemplates(false)
   }
 
-  const removeArticle = (id) => {
-    const filtered = articles.filter(a => a.id !== id)
-    sync(filtered.map((a, i) => ({ ...a, number: i + 1 })))
+  var removeArticle = function(id) {
+    var filtered = articles.filter(function(a) { return a.id !== id })
+    sync(filtered.map(function(a, i) { return Object.assign({}, a, { number: i + 1 }) }))
     if (editingId === id) setEditingId(null)
   }
 
-  const moveArticle = (idx, dir) => {
-    const next = [...articles]
-    const ni = idx + dir
+  var moveArticle = function(idx, dir) {
+    var next = articles.slice()
+    var ni = idx + dir
     if (ni < 0 || ni >= next.length) return
-    ;[next[idx], next[ni]] = [next[ni], next[idx]]
-    sync(next.map((a, i) => ({ ...a, number: i + 1 })))
+    var temp = next[idx]
+    next[idx] = next[ni]
+    next[ni] = temp
+    sync(next.map(function(a, i) { return Object.assign({}, a, { number: i + 1 }) }))
   }
 
-  const updateArticle = (id, updates) => {
-    sync(articles.map(a => a.id === id ? { ...a, ...updates } : a))
+  var updateArticle = function(id, updates) {
+    sync(articles.map(function(a) { return a.id === id ? Object.assign({}, a, updates) : a }))
   }
 
   /* ─── 항 조작 ─── */
-  const addParagraph = (artId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: [...a.paragraphs, mkPara()]
+  var addParagraph = function(artId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, { paragraphs: a.paragraphs.concat([mkPara()]) })
     }))
   }
 
-  const removeParagraph = (artId, paraId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.filter(p => p.id !== paraId)
+  var removeParagraph = function(artId, paraId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, { paragraphs: a.paragraphs.filter(function(p) { return p.id !== paraId }) })
     }))
   }
 
-  const updateParagraph = (artId, paraId, content) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : { ...p, content })
+  var updateParagraph = function(artId, paraId, content) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          return p.id !== paraId ? p : Object.assign({}, p, { content: content })
+        })
+      })
     }))
   }
 
   /* ─── 호 조작 ─── */
-  const addItem = (artId, paraId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: [...p.items, mkItem()]
+  var addItem = function(artId, paraId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, { items: p.items.concat([mkItem()]) })
+        })
       })
     }))
   }
 
-  const removeItem = (artId, paraId, itemId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.filter(i => i.id !== itemId)
+  var removeItem = function(artId, paraId, itemId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, { items: p.items.filter(function(i) { return i.id !== itemId }) })
+        })
       })
     }))
   }
 
-  const updateItem = (artId, paraId, itemId, content) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : { ...i, content })
+  var updateItem = function(artId, paraId, itemId, content) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, {
+            items: p.items.map(function(i) {
+              return i.id !== itemId ? i : Object.assign({}, i, { content: content })
+            })
+          })
+        })
       })
     }))
   }
 
   /* ─── 목 조작 ─── */
-  const addSubItem = (artId, paraId, itemId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
-          ...i, subItems: [...i.subItems, mkSubItem()]
+  var addSubItem = function(artId, paraId, itemId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, {
+            items: p.items.map(function(i) {
+              if (i.id !== itemId) return i
+              return Object.assign({}, i, { subItems: i.subItems.concat([mkSubItem()]) })
+            })
+          })
         })
       })
     }))
   }
 
-  const removeSubItem = (artId, paraId, itemId, subId) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
-          ...i, subItems: i.subItems.filter(s => s.id !== subId)
+  var removeSubItem = function(artId, paraId, itemId, subId) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, {
+            items: p.items.map(function(i) {
+              if (i.id !== itemId) return i
+              return Object.assign({}, i, { subItems: i.subItems.filter(function(s) { return s.id !== subId }) })
+            })
+          })
         })
       })
     }))
   }
 
-  const updateSubItem = (artId, paraId, itemId, subId, content) => {
-    sync(articles.map(a => a.id !== artId ? a : {
-      ...a, paragraphs: a.paragraphs.map(p => p.id !== paraId ? p : {
-        ...p, items: p.items.map(i => i.id !== itemId ? i : {
-          ...i, subItems: i.subItems.map(s => s.id !== subId ? s : { ...s, content })
+  var updateSubItem = function(artId, paraId, itemId, subId, content) {
+    sync(articles.map(function(a) {
+      if (a.id !== artId) return a
+      return Object.assign({}, a, {
+        paragraphs: a.paragraphs.map(function(p) {
+          if (p.id !== paraId) return p
+          return Object.assign({}, p, {
+            items: p.items.map(function(i) {
+              if (i.id !== itemId) return i
+              return Object.assign({}, i, {
+                subItems: i.subItems.map(function(s) {
+                  return s.id !== subId ? s : Object.assign({}, s, { content: content })
+                })
+              })
+            })
+          })
         })
       })
     }))
@@ -277,6 +396,17 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
             : '키워드와 사전조사 리포트를 바탕으로 조문 초안을 자동 생성합니다.'
           }
         </p>
+        {aiStatus === 'fallback' && (
+          <p style={{color: '#c0392b', fontSize: '13px', marginTop: '8px'}}>
+            AI 연결에 실패하여 기본 템플릿이 적용되었습니다. 내용을 편집하여 사용하세요.
+            (F12 콘솔에서 오류 내용을 확인할 수 있습니다)
+          </p>
+        )}
+        {aiStatus === 'success' && (
+          <p style={{color: '#27ae60', fontSize: '13px', marginTop: '8px'}}>
+            AI 조문이 성공적으로 생성되었습니다.
+          </p>
+        )}
       </div>
 
       {/* 조문 목록 */}
@@ -286,38 +416,40 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         </div>
       ) : (
         <div className="articles-list">
-          {articles.map((art, artIdx) => (
-            <ArticleBlock
-              key={art.id}
-              article={art}
-              artIdx={artIdx}
-              totalCount={articles.length}
-              isEditing={editingId === art.id}
-              onStartEdit={() => setEditingId(art.id)}
-              onStopEdit={() => setEditingId(null)}
-              onRemove={() => removeArticle(art.id)}
-              onMove={(dir) => moveArticle(artIdx, dir)}
-              onUpdateTitle={(title) => updateArticle(art.id, { title })}
-              onAddParagraph={() => addParagraph(art.id)}
-              onRemoveParagraph={(pId) => removeParagraph(art.id, pId)}
-              onUpdateParagraph={(pId, c) => updateParagraph(art.id, pId, c)}
-              onAddItem={(pId) => addItem(art.id, pId)}
-              onRemoveItem={(pId, iId) => removeItem(art.id, pId, iId)}
-              onUpdateItem={(pId, iId, c) => updateItem(art.id, pId, iId, c)}
-              onAddSubItem={(pId, iId) => addSubItem(art.id, pId, iId)}
-              onRemoveSubItem={(pId, iId, sId) => removeSubItem(art.id, pId, iId, sId)}
-              onUpdateSubItem={(pId, iId, sId, c) => updateSubItem(art.id, pId, iId, sId, c)}
-            />
-          ))}
+          {articles.map(function(art, artIdx) {
+            return (
+              <ArticleBlock
+                key={art.id}
+                article={art}
+                artIdx={artIdx}
+                totalCount={articles.length}
+                isEditing={editingId === art.id}
+                onStartEdit={function() { setEditingId(art.id) }}
+                onStopEdit={function() { setEditingId(null) }}
+                onRemove={function() { removeArticle(art.id) }}
+                onMove={function(dir) { moveArticle(artIdx, dir) }}
+                onUpdateTitle={function(title) { updateArticle(art.id, { title: title }) }}
+                onAddParagraph={function() { addParagraph(art.id) }}
+                onRemoveParagraph={function(pId) { removeParagraph(art.id, pId) }}
+                onUpdateParagraph={function(pId, c) { updateParagraph(art.id, pId, c) }}
+                onAddItem={function(pId) { addItem(art.id, pId) }}
+                onRemoveItem={function(pId, iId) { removeItem(art.id, pId, iId) }}
+                onUpdateItem={function(pId, iId, c) { updateItem(art.id, pId, iId, c) }}
+                onAddSubItem={function(pId, iId) { addSubItem(art.id, pId, iId) }}
+                onRemoveSubItem={function(pId, iId, sId) { removeSubItem(art.id, pId, iId, sId) }}
+                onUpdateSubItem={function(pId, iId, sId, c) { updateSubItem(art.id, pId, iId, sId, c) }}
+              />
+            )
+          })}
         </div>
       )}
 
       {/* 조 추가 */}
       <div className="add-article-area">
-        <button className="btn btn-outline" onClick={() => addArticle()}>
+        <button className="btn btn-outline" onClick={function() { addArticle() }}>
           + 빈 조 추가
         </button>
-        <button className="btn btn-outline" onClick={() => setShowTemplates(!showTemplates)}>
+        <button className="btn btn-outline" onClick={function() { setShowTemplates(!showTemplates) }}>
           {showTemplates ? '템플릿 닫기' : '+ 템플릿에서 추가'}
         </button>
       </div>
@@ -327,25 +459,29 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
         <div className="template-panel">
           <h3 className="template-panel-title">자주 사용하는 조문</h3>
           <p className="template-panel-desc">여러 개를 선택한 후 한번에 추가할 수 있습니다.</p>
-          {Object.entries(TEMPLATES).map(([category, items]) => (
-            <div key={category} className="template-category">
-              <h4 className="template-category-title">{category}</h4>
-              <div className="template-items">
-                {items.map((tmpl, i) => {
-                  const isSelected = selectedTemplates.find(t => t.title === tmpl.title)
-                  return (
-                    <button
-                      key={i}
-                      className={'template-item' + (isSelected ? ' selected' : '')}
-                      onClick={() => toggleTemplate(tmpl)}
-                    >
-                      {isSelected ? '✓ ' : ''}{tmpl.title}
-                    </button>
-                  )
-                })}
+          {Object.entries(TEMPLATES).map(function(entry) {
+            var category = entry[0]
+            var items = entry[1]
+            return (
+              <div key={category} className="template-category">
+                <h4 className="template-category-title">{category}</h4>
+                <div className="template-items">
+                  {items.map(function(tmpl, i) {
+                    var isSelected = selectedTemplates.find(function(t) { return t.title === tmpl.title })
+                    return (
+                      <button
+                        key={i}
+                        className={'template-item' + (isSelected ? ' selected' : '')}
+                        onClick={function() { toggleTemplate(tmpl) }}
+                      >
+                        {isSelected ? '✓ ' : ''}{tmpl.title}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           {selectedTemplates.length > 0 && (
             <div className="template-action">
               <span className="template-count">{selectedTemplates.length}개 선택됨</span>
@@ -366,48 +502,52 @@ export default function Step2ArticleEditor({ data, onUpdate, onNext }) {
 }
 
 /* ─── 조문 블록 ─── */
-function ArticleBlock({
-  article: art, artIdx, totalCount,
-  isEditing, onStartEdit, onStopEdit,
-  onRemove, onMove, onUpdateTitle,
-  onAddParagraph, onRemoveParagraph, onUpdateParagraph,
-  onAddItem, onRemoveItem, onUpdateItem,
-  onAddSubItem, onRemoveSubItem, onUpdateSubItem,
-}) {
+function ArticleBlock(props) {
+  var art = props.article
+  var artIdx = props.artIdx
+  var totalCount = props.totalCount
+  var isEditing = props.isEditing
+
   if (!isEditing) {
     // ─── 보기 모드 ───
     return (
       <div className="article-block">
         <div className="article-header">
-          <span className="article-number">제{art.number}조({art.title || '제목 없음'})</span>
+          <span className="article-number">{'제' + art.number + '조(' + (art.title || '제목 없음') + ')'}</span>
           <div className="article-actions">
-            <button className="article-action-btn" onClick={() => onMove(-1)} disabled={artIdx === 0}>▲</button>
-            <button className="article-action-btn" onClick={() => onMove(1)} disabled={artIdx === totalCount - 1}>▼</button>
-            <button className="article-action-btn" onClick={onStartEdit}>편집</button>
-            <button className="article-action-btn danger" onClick={onRemove}>삭제</button>
+            <button className="article-action-btn" onClick={function() { props.onMove(-1) }} disabled={artIdx === 0}>▲</button>
+            <button className="article-action-btn" onClick={function() { props.onMove(1) }} disabled={artIdx === totalCount - 1}>▼</button>
+            <button className="article-action-btn" onClick={props.onStartEdit}>편집</button>
+            <button className="article-action-btn danger" onClick={props.onRemove}>삭제</button>
           </div>
         </div>
         <div className="article-body-view">
-          {art.paragraphs.map((para, pi) => (
-            <div key={para.id} className="para-view">
-              <span className="para-prefix">
-                {art.paragraphs.length > 1 ? (CIRCLED[pi] || `(${pi + 1})`) + ' ' : ''}
-              </span>
-              <span>{para.content}</span>
-              {para.items.map((item, ii) => (
-                <div key={item.id} className="item-view">
-                  <span className="item-prefix">{ii + 1}. </span>
-                  <span>{item.content}</span>
-                  {item.subItems.map((sub, si) => (
-                    <div key={sub.id} className="subitem-view">
-                      <span className="subitem-prefix">{MOK[si] || '?'}. </span>
-                      <span>{sub.content}</span>
+          {art.paragraphs.map(function(para, pi) {
+            return (
+              <div key={para.id} className="para-view">
+                <span className="para-prefix">
+                  {art.paragraphs.length > 1 ? (CIRCLED[pi] || ('(' + (pi + 1) + ')')) + ' ' : ''}
+                </span>
+                <span>{para.content}</span>
+                {para.items.map(function(item, ii) {
+                  return (
+                    <div key={item.id} className="item-view">
+                      <span className="item-prefix">{(ii + 1) + '. '}</span>
+                      <span>{item.content}</span>
+                      {item.subItems.map(function(sub, si) {
+                        return (
+                          <div key={sub.id} className="subitem-view">
+                            <span className="subitem-prefix">{(MOK[si] || '?') + '. '}</span>
+                            <span>{sub.content}</span>
+                          </div>
+                        )
+                      })}
                     </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
       </div>
     )
@@ -418,76 +558,82 @@ function ArticleBlock({
     <div className="article-block editing">
       <div className="article-header">
         <div className="article-title-edit">
-          <span className="article-number-label">제{art.number}조</span>
+          <span className="article-number-label">{'제' + art.number + '조'}</span>
           <input
             type="text"
             className="article-title-input"
             value={art.title}
-            onChange={e => onUpdateTitle(e.target.value)}
+            onChange={function(e) { props.onUpdateTitle(e.target.value) }}
             placeholder="조문 제목"
           />
         </div>
         <div className="article-actions">
-          <button className="article-action-btn primary" onClick={onStopEdit}>저장</button>
-          <button className="article-action-btn danger" onClick={onRemove}>삭제</button>
+          <button className="article-action-btn primary" onClick={props.onStopEdit}>저장</button>
+          <button className="article-action-btn danger" onClick={props.onRemove}>삭제</button>
         </div>
       </div>
 
       <div className="article-body-edit">
-        {art.paragraphs.map((para, pi) => (
-          <div key={para.id} className="para-edit">
-            <div className="para-edit-row">
-              {art.paragraphs.length > 1 && (
-                <span className="para-edit-prefix">{CIRCLED[pi] || `(${pi + 1})`}</span>
-              )}
-              <textarea
-                className="para-textarea"
-                value={para.content}
-                onChange={e => onUpdateParagraph(para.id, e.target.value)}
-                placeholder="항 내용을 입력하세요"
-                rows={2}
-              />
-              {art.paragraphs.length > 1 && (
-                <button className="inline-remove" onClick={() => onRemoveParagraph(para.id)}>삭제</button>
-              )}
-            </div>
-
-            {/* 호 목록 */}
-            {para.items.map((item, ii) => (
-              <div key={item.id} className="item-edit">
-                <div className="item-edit-row">
-                  <span className="item-edit-prefix">{ii + 1}.</span>
-                  <input
-                    type="text"
-                    className="item-input"
-                    value={item.content}
-                    onChange={e => onUpdateItem(para.id, item.id, e.target.value)}
-                    placeholder="호 내용"
-                  />
-                  <button className="inline-remove" onClick={() => onRemoveItem(para.id, item.id)}>삭제</button>
-                </div>
-
-                {/* 목 목록 */}
-                {item.subItems.map((sub, si) => (
-                  <div key={sub.id} className="subitem-edit">
-                    <span className="subitem-edit-prefix">{MOK[si] || '?'}.</span>
-                    <input
-                      type="text"
-                      className="subitem-input"
-                      value={sub.content}
-                      onChange={e => onUpdateSubItem(para.id, item.id, sub.id, e.target.value)}
-                      placeholder="목 내용"
-                    />
-                    <button className="inline-remove" onClick={() => onRemoveSubItem(para.id, item.id, sub.id)}>삭제</button>
-                  </div>
-                ))}
-                <button className="add-inline-btn" onClick={() => onAddSubItem(para.id, item.id)}>+ 목</button>
+        {art.paragraphs.map(function(para, pi) {
+          return (
+            <div key={para.id} className="para-edit">
+              <div className="para-edit-row">
+                {art.paragraphs.length > 1 && (
+                  <span className="para-edit-prefix">{CIRCLED[pi] || ('(' + (pi + 1) + ')')}</span>
+                )}
+                <textarea
+                  className="para-textarea"
+                  value={para.content}
+                  onChange={function(e) { props.onUpdateParagraph(para.id, e.target.value) }}
+                  placeholder="항 내용을 입력하세요"
+                  rows={2}
+                />
+                {art.paragraphs.length > 1 && (
+                  <button className="inline-remove" onClick={function() { props.onRemoveParagraph(para.id) }}>삭제</button>
+                )}
               </div>
-            ))}
-            <button className="add-inline-btn" onClick={() => onAddItem(para.id)}>+ 호 추가</button>
-          </div>
-        ))}
-        <button className="add-inline-btn para-add" onClick={onAddParagraph}>+ 항 추가</button>
+
+              {/* 호 목록 */}
+              {para.items.map(function(item, ii) {
+                return (
+                  <div key={item.id} className="item-edit">
+                    <div className="item-edit-row">
+                      <span className="item-edit-prefix">{(ii + 1) + '.'}</span>
+                      <input
+                        type="text"
+                        className="item-input"
+                        value={item.content}
+                        onChange={function(e) { props.onUpdateItem(para.id, item.id, e.target.value) }}
+                        placeholder="호 내용"
+                      />
+                      <button className="inline-remove" onClick={function() { props.onRemoveItem(para.id, item.id) }}>삭제</button>
+                    </div>
+
+                    {/* 목 목록 */}
+                    {item.subItems.map(function(sub, si) {
+                      return (
+                        <div key={sub.id} className="subitem-edit">
+                          <span className="subitem-edit-prefix">{(MOK[si] || '?') + '.'}</span>
+                          <input
+                            type="text"
+                            className="subitem-input"
+                            value={sub.content}
+                            onChange={function(e) { props.onUpdateSubItem(para.id, item.id, sub.id, e.target.value) }}
+                            placeholder="목 내용"
+                          />
+                          <button className="inline-remove" onClick={function() { props.onRemoveSubItem(para.id, item.id, sub.id) }}>삭제</button>
+                        </div>
+                      )
+                    })}
+                    <button className="add-inline-btn" onClick={function() { props.onAddSubItem(para.id, item.id) }}>+ 목</button>
+                  </div>
+                )
+              })}
+              <button className="add-inline-btn" onClick={function() { props.onAddItem(para.id) }}>+ 호 추가</button>
+            </div>
+          )
+        })}
+        <button className="add-inline-btn para-add" onClick={props.onAddParagraph}>+ 항 추가</button>
       </div>
     </div>
   )

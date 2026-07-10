@@ -20,11 +20,20 @@ const TYPES = [
   },
 ]
 
-export default function Phase3Decision({ searchData, onStart, onBack, onExportReport }) {
+export default function Phase3Decision({ searchData, selectedRefs, onStart, onBack, onExportReport }) {
   const [selectedType, setSelectedType] = useState(null)
   const [selectedTarget, setSelectedTarget] = useState(null)
 
   const localItems = searchData?.localOrdinances?.items || []
+  const otherItems = searchData?.otherRegions?.items || []
+  const refItems = selectedRefs || []
+
+  // 대상 조례 목록: 경기도 조례 + 선택된 참고 조례 (중복 제거)
+  const localIds = new Set(localItems.map(function(it) { return it.id }))
+  const extraRefs = refItems.filter(function(ref) {
+    return !localIds.has(ref.id)
+  })
+
   const needsTarget = TYPES.find(t => t.key === selectedType)?.needsTarget
   const canProceed = selectedType && (!needsTarget || selectedTarget)
 
@@ -69,10 +78,12 @@ export default function Phase3Decision({ searchData, onStart, onBack, onExportRe
             {selectedType === type.key && type.needsTarget && (
               <div className="target-select">
                 <p className="target-label">대상 조례를 선택하세요.</p>
-                {localItems.length > 0 ? (
+
+                {/* 경기도 조례 */}
+                {localItems.length > 0 && (
                   <div className="target-list">
                     {localItems.map((item, i) => (
-                      <label key={i} className="target-item">
+                      <label key={'local-' + i} className="target-item">
                         <input
                           type="radio"
                           name="targetOrdinance"
@@ -84,9 +95,36 @@ export default function Phase3Decision({ searchData, onStart, onBack, onExportRe
                       </label>
                     ))}
                   </div>
-                ) : (
+                )}
+
+                {/* 선택한 참고 조례 (타 시도) */}
+                {extraRefs.length > 0 && (
+                  <>
+                    <p className="target-label" style={{marginTop: 12, fontSize: '0.85rem', color: '#666'}}>
+                      선택한 참고 조례 (타 시도)
+                    </p>
+                    <div className="target-list">
+                      {extraRefs.map((item, i) => (
+                        <label key={'ref-' + i} className="target-item">
+                          <input
+                            type="radio"
+                            name="targetOrdinance"
+                            checked={selectedTarget?.id === item.id}
+                            onChange={() => setSelectedTarget(item)}
+                          />
+                          <span className="target-item-name">
+                            {item.org ? item.org + ' ' : ''}{item.name}
+                          </span>
+                          <span className="target-item-date">{formatDate(item.date)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {localItems.length === 0 && extraRefs.length === 0 && (
                   <p className="target-empty">
-                    Phase 1에서 검색된 경기도 조례가 없습니다.
+                    검색된 조례가 없습니다.
                     개정 대상 조례가 있는 경우 다시 검색해 주세요.
                   </p>
                 )}
@@ -124,5 +162,5 @@ export default function Phase3Decision({ searchData, onStart, onBack, onExportRe
 
 function formatDate(d) {
   if (!d || d.length !== 8) return ''
-  return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`
+  return d.slice(0,4) + '.' + d.slice(4,6) + '.' + d.slice(6,8)
 }

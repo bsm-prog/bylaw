@@ -218,28 +218,46 @@ export async function testConnection() {
  * 항·호·목까지 구조화하여 반환
  *
  * 전략: XML API를 우선 사용 (HTML은 클라이언트 렌더링이라 DOMParser로 파싱 불가)
+ *
+ * @param {string|object} nameOrObj - 조례명(문자열) 또는 검색결과 객체 {name, serial, id, org}
+ *   객체를 전달하면 재검색 없이 serial/id로 직접 상세 조회 (더 빠르고 정확)
  */
-export async function getOrdinanceFullText(ordinanceName) {
+export async function getOrdinanceFullText(nameOrObj) {
   try {
-    console.log('[lawApi] 조례 원문 조회:', ordinanceName)
+    var ordinanceName, serialNum, orgName
 
-    // 1단계: 검색으로 일련번호·자치단체명 확보
-    var apiUrl = buildUrl({
-      target: 'ordin',
-      query: ordinanceName,
-      display: '1',
-    })
-    var text = await fetchViaProxy(apiUrl)
-    var doc = parseXML(text)
+    if (typeof nameOrObj === 'object' && nameOrObj !== null) {
+      // 객체 전달: 검색 결과에서 serial/id를 이미 알고 있음
+      ordinanceName = nameOrObj.name || ''
+      serialNum = nameOrObj.serial || nameOrObj.id || ''
+      orgName = nameOrObj.org || ''
+      console.log('[lawApi] 조례 원문 직접 조회:', ordinanceName, ', serial:', serialNum)
+    } else {
+      // 문자열 전달: 이름으로 검색해서 serial 확보 (기존 방식)
+      ordinanceName = nameOrObj || ''
+      console.log('[lawApi] 조례 원문 검색 조회:', ordinanceName)
 
-    var serial = doc.querySelector('자치법규일련번호')
-    if (!serial || !serial.textContent) {
-      console.warn('[lawApi] 조례 일련번호를 찾을 수 없음')
-      return null
+      var apiUrl = buildUrl({
+        target: 'ordin',
+        query: ordinanceName,
+        display: '1',
+      })
+      var text = await fetchViaProxy(apiUrl)
+      var doc = parseXML(text)
+
+      var serialEl = doc.querySelector('자치법규일련번호')
+      if (!serialEl || !serialEl.textContent) {
+        console.warn('[lawApi] 조례 일련번호를 찾을 수 없음')
+        return null
+      }
+      serialNum = serialEl.textContent
+      orgName = doc.querySelector('자치단체명')?.textContent || ''
     }
 
-    var orgName = doc.querySelector('자치단체명')?.textContent || ''
-    var serialNum = serial.textContent
+    if (!serialNum) {
+      console.warn('[lawApi] serial 번호 없음')
+      return null
+    }
     console.log('[lawApi] 일련번호(MST):', serialNum, ', 자치단체:', orgName)
 
     // 2단계: XML 본문 조회 (우선)

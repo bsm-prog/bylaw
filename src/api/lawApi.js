@@ -216,6 +216,8 @@ export async function testConnection() {
 /**
  * 조례 원문(전문) 조회
  * 항·호·목까지 구조화하여 반환
+ *
+ * 전략: XML API를 우선 사용 (HTML은 클라이언트 렌더링이라 DOMParser로 파싱 불가)
  */
 export async function getOrdinanceFullText(ordinanceName) {
   try {
@@ -240,99 +242,69 @@ export async function getOrdinanceFullText(ordinanceName) {
     var serialNum = serial.textContent
     console.log('[lawApi] 일련번호(MST):', serialNum, ', 자치단체:', orgName)
 
-    // 2단계: HTML 모바일 본문 조회
-    // 자치법규일련번호는 MST(마스터번호)에 해당 (ID가 아님!)
-    var htmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
+    // 2단계: XML 본문 조회 (우선)
+    var articles = []
+
+    var xmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
       + '?OC=' + OC
       + '&target=ordin'
-      + '&type=HTML'
-      + '&mobileYn=Y'
+      + '&type=XML'
       + '&MST=' + serialNum
+    console.log('[lawApi] XML 본문 요청')
 
-    var htmlText = await fetchViaProxy(htmlUrl)
-    console.log('[lawApi] HTML 본문 응답 길이:', htmlText.length)
+    var xmlText = await fetchViaProxy(xmlUrl)
+    console.log('[lawApi] XML 응답 길이:', xmlText.length,
+      ', 조문단위 포함:', xmlText.indexOf('조문단위') >= 0,
+      ', 조문번호 포함:', xmlText.indexOf('조문번호') >= 0)
 
-    // "일치하는 자치법규가 없습니다" 응답인 경우 ID로 재시도
-    if (htmlText.indexOf('일치하는') >= 0 && htmlText.length < 200) {
-      console.log('[lawApi] MST로 조회 실패, ID로 재시도')
-      var htmlUrl2 = 'https://www.law.go.kr/DRF/lawService.do'
-        + '?OC=' + OC
-        + '&target=ordin'
-        + '&type=HTML'
-        + '&mobileYn=Y'
-        + '&ID=' + serialNum
-      htmlText = await fetchViaProxy(htmlUrl2)
-      console.log('[lawApi] ID 재시도 응답 길이:', htmlText.length)
+    // 에러 응답 확인
+    var isError = xmlText.indexOf('검증에 실패') >= 0
+      || xmlText.indexOf('일치하는') >= 0
+      || xmlText.length < 300
+    if (!isError) {
+      var xmlDoc = parseXML(xmlText)
+      articles = parseXmlArticles(xmlDoc)
+      console.log('[lawApi] XML 파싱 결과:', articles.length, '조')
+    } else {
+      console.warn('[lawApi] XML 응답 에러 또는 너무 짧음')
     }
 
-    // HTML에서 텍스트 추출 (브라우저 DOMParser 활용)
-    var htmlDoc = new DOMParser().parseFromString(htmlText, 'text/html')
-
-    // 본문 텍스트 추출: <br> → \n 변환 후 텍스트
-    var bodyEl = htmlDoc.body || htmlDoc.documentElement
-    // <br> 태그를 줄바꿈으로 치환
-    bodyEl.querySelectorAll('br').forEach(function(br) {
-      br.replaceWith('\n')
-    })
-    var rawText = (bodyEl.textContent || bodyEl.innerText || '').trim()
-    console.log('[lawApi] HTML 텍스트 추출 길이:', rawText.length)
-
-    // 3단계: 텍스트에서 조문 파싱
-    var articles = parseArticlesFromText(rawText)
-    console.log('[lawApi] 조문 파싱 결과:', articles.length, '조')
-
-    // 4단계: XML 방식도 시도 (혹시 XML이 더 나은 경우 대비)
+    // 3단계: XML 실패 시 ID 파라미터로 재시도
     if (articles.length === 0) {
-      console.log('[lawApi] HTML 파싱 실패, XML 시도')
-      var xmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
+      console.log('[lawApi] MST 실패, ID로 재시도')
+      var xmlUrl2 = 'https://www.law.go.kr/DRF/lawService.do'
         + '?OC=' + OC
         + '&target=ordin'
         + '&type=XML'
-        + '&MST=' + serialNum
-
-      var xmlText = await fetchViaProxy(xmlUrl)
-      var xmlDoc = parseXML(xmlText)
-
-      xmlDoc.querySelectorAll('조문단위').forEach(function(jo) {
-        var joNum = jo.querySelector('조문번호')?.textContent || ''
-        var joTitle = jo.querySelector('조문제목')?.textContent || ''
-        var joContent = jo.querySelector('조문내용')?.textContent || ''
-
-        var paragraphs = []
-        jo.querySelectorAll('항').forEach(function(hang) {
-          var hangContent = hang.querySelector('항내용')?.textContent || ''
-          var items = []
-          hang.querySelectorAll('호').forEach(function(ho) {
-            var hoContent = ho.querySelector('호내용')?.textContent || ''
-            var subItems = []
-            ho.querySelectorAll('목').forEach(function(mok) {
-              var mokContent = mok.querySelector('목내용')?.textContent || ''
-              if (mokContent) subItems.push({ content: mokContent })
-            })
-            if (hoContent) items.push({ content: hoContent, subItems: subItems })
-          })
-          paragraphs.push({ content: hangContent, items: items })
-        })
-
-        if (paragraphs.length === 0 && joContent) {
-          paragraphs.push(parseItemsFromText(joContent))
+        + '&ID=' + serialNum
+      try {
+        var xmlText2 = await fetchViaProxy(xmlUrl2)
+        if (xmlText2.length > 300
+          && xmlText2.indexOf('검증에 실패') < 0) {
+          var xmlDoc2 = parseXML(xmlText2)
+          articles = parseXmlArticles(xmlDoc2)
+          console.log('[lawApi] ID 재시도 XML 파싱:', articles.length, '조')
         }
+      } catch (e) {
+        console.warn('[lawApi] ID 재시도 실패:', e.message)
+      }
+    }
 
-        articles.push({
-          number: joNum, title: joTitle, content: joContent,
-          paragraphs: paragraphs,
-        })
-      })
-      console.log('[lawApi] XML 파싱 결과:', articles.length, '조')
+    // 4단계: XML 파싱 실패 시 HTML 시도 (일부 조례는 HTML만 제공)
+    if (articles.length === 0) {
+      console.log('[lawApi] XML 파싱 실패, HTML 시도')
+      articles = await tryHtmlParsing(serialNum)
     }
 
     // 전체 텍스트 조합 (AI 전달용)
     var fullText
     if (articles.length === 0) {
-      fullText = rawText || ''
+      fullText = ''
     } else {
       fullText = articles.map(function(a) {
-        var line = a.number + (a.title ? '(' + a.title + ')' : '') + ' ' + a.content
+        var line = a.number
+          + (a.title ? '(' + a.title + ')' : '')
+          + ' ' + a.content
         a.paragraphs.forEach(function(p) {
           if (p.content) line += '\n' + p.content
           p.items.forEach(function(item, ii) {
@@ -347,7 +319,8 @@ export async function getOrdinanceFullText(ordinanceName) {
       }).join('\n\n')
     }
 
-    console.log('[lawApi] 조례 원문 추출 완료:', articles.length, '조, fullText 길이:', fullText.length)
+    console.log('[lawApi] 조례 원문 추출 완료:',
+      articles.length, '조, fullText 길이:', fullText.length)
 
     return {
       name: ordinanceName,
@@ -362,12 +335,173 @@ export async function getOrdinanceFullText(ordinanceName) {
 }
 
 /**
- * 조문내용 텍스트에서 호·목 파싱 (XML에 호 태그가 없을 때 사용)
+ * XML 문서에서 조문 파싱
+ * 여러 가능한 태그 구조를 시도
+ */
+function parseXmlArticles(xmlDoc) {
+  var articles = []
+
+  // 방법1: 조문단위 태그 (표준 구조)
+  var joUnits = xmlDoc.querySelectorAll('조문단위')
+  if (joUnits.length === 0) {
+    // 방법2: 조문 > 하위 요소
+    joUnits = xmlDoc.querySelectorAll('조문')
+  }
+
+  console.log('[lawApi] XML 조문 요소 수:', joUnits.length)
+
+  joUnits.forEach(function(jo) {
+    var joNum = ''
+    var joTitle = ''
+    var joContent = ''
+
+    // 조문번호 (여러 태그명 시도)
+    var numEl = jo.querySelector('조문번호')
+    if (numEl) joNum = numEl.textContent.trim()
+
+    // 조문제목
+    var titleEl = jo.querySelector('조문제목')
+    if (titleEl) joTitle = titleEl.textContent.trim()
+
+    // 조문내용
+    var contentEl = jo.querySelector('조문내용')
+    if (contentEl) joContent = contentEl.textContent.trim()
+
+    // 조문번호가 없으면 건너뛰기
+    if (!joNum && !joContent) return
+
+    var paragraphs = []
+
+    // 항 파싱
+    jo.querySelectorAll('항').forEach(function(hang) {
+      var hangContent = ''
+      var hcEl = hang.querySelector('항내용')
+      if (hcEl) hangContent = hcEl.textContent.trim()
+
+      var items = []
+      hang.querySelectorAll('호').forEach(function(ho) {
+        var hoContent = ''
+        var hoEl = ho.querySelector('호내용')
+        if (hoEl) hoContent = hoEl.textContent.trim()
+
+        var subItems = []
+        ho.querySelectorAll('목').forEach(function(mok) {
+          var mokContent = ''
+          var mokEl = mok.querySelector('목내용')
+          if (mokEl) mokContent = mokEl.textContent.trim()
+          if (mokContent) subItems.push({ content: mokContent })
+        })
+        if (hoContent) {
+          items.push({ content: hoContent, subItems: subItems })
+        }
+      })
+      paragraphs.push({ content: hangContent, items: items })
+    })
+
+    // 항 태그가 없으면 조문내용에서 텍스트 파싱
+    if (paragraphs.length === 0 && joContent) {
+      paragraphs.push(parseItemsFromText(
+        normalizeInlineItems(joContent)
+      ))
+    }
+
+    articles.push({
+      number: joNum,
+      title: joTitle,
+      content: joContent,
+      paragraphs: paragraphs,
+    })
+  })
+
+  return articles
+}
+
+/**
+ * HTML 방식 조문 파싱 (XML 실패 시 fallback)
+ * HTML은 클라이언트 렌더링이므로 성공률 낮음
+ */
+async function tryHtmlParsing(serialNum) {
+  try {
+    var htmlUrl = 'https://www.law.go.kr/DRF/lawService.do'
+      + '?OC=' + OC
+      + '&target=ordin'
+      + '&type=HTML'
+      + '&mobileYn=Y'
+      + '&MST=' + serialNum
+
+    var htmlText = await fetchViaProxy(htmlUrl)
+    console.log('[lawApi] HTML 응답 길이:', htmlText.length)
+
+    // "일치하는 자치법규가 없습니다" 응답인 경우 ID로 재시도
+    if (htmlText.indexOf('일치하는') >= 0 && htmlText.length < 200) {
+      var htmlUrl2 = 'https://www.law.go.kr/DRF/lawService.do'
+        + '?OC=' + OC
+        + '&target=ordin'
+        + '&type=HTML'
+        + '&mobileYn=Y'
+        + '&ID=' + serialNum
+      htmlText = await fetchViaProxy(htmlUrl2)
+    }
+
+    var htmlDoc = new DOMParser().parseFromString(htmlText, 'text/html')
+    var bodyEl = htmlDoc.body || htmlDoc.documentElement
+
+    // 모든 블록 요소 뒤에 줄바꿈 삽입
+    var blockTags = ['p', 'div', 'br', 'tr', 'li', 'dt', 'dd', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+    blockTags.forEach(function(tag) {
+      bodyEl.querySelectorAll(tag).forEach(function(el) {
+        if (tag === 'br') {
+          el.replaceWith('\n')
+        } else {
+          el.insertAdjacentText('afterend', '\n')
+        }
+      })
+    })
+
+    var rawText = (bodyEl.textContent || '').trim()
+    console.log('[lawApi] HTML 텍스트 길이:', rawText.length,
+      ', 제X조 포함:', /제\d+조/.test(rawText))
+
+    // script/style 내용이 대부분이면 클라이언트 렌더링 페이지
+    if (rawText.indexOf('$(document).ready') >= 0
+      || rawText.indexOf('mobileOrdinInfoR') >= 0) {
+      console.log('[lawApi] 클라이언트 렌더링 감지, HTML 파싱 불가')
+      return []
+    }
+
+    var normalized = normalizeInlineItems(rawText)
+    return parseArticlesFromText(normalized)
+  } catch (err) {
+    console.warn('[lawApi] HTML 파싱 실패:', err.message)
+    return []
+  }
+}
+
+/**
+ * 인라인 호·목을 줄바꿈으로 분리
+ * API 응답에서 "같다.1. 항목2. 항목" 형태의 연속 텍스트를 정규화
+ */
+function normalizeInlineItems(text) {
+  if (!text) return ''
+  var result = text
+  // 호 패턴: 한글/닫는괄호 뒤에 "숫자. " 이 붙어있으면 앞에 줄바꿈
+  result = result.replace(/([가-힣)\]])(\d+\.\s)/g, '$1\n$2')
+  // 항 패턴: ①②③ 등 앞에 줄바꿈
+  result = result.replace(/([^\n])([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])/g, '$1\n$2')
+  // 목 패턴: "가. ", "나. " 등이 문장 중간에 있으면 분리
+  result = result.replace(/([^\n])([가나다라마바사아자차카타파하]\.\s)/g, '$1\n$2')
+  return result
+}
+
+/**
+ * 조문내용 텍스트에서 호·목 파싱
  */
 function parseItemsFromText(text) {
   if (!text) return { content: '', items: [] }
 
-  var lines = text.split(/\n/)
+  // 먼저 인라인 항목을 줄바꿈으로 분리
+  var normalized = normalizeInlineItems(text)
+  var lines = normalized.split(/\n/)
   var mainContent = ''
   var items = []
   var currentItem = null
@@ -409,42 +543,42 @@ function parseItemsFromText(text) {
 
 /**
  * 전체 텍스트에서 조문(제○조) 단위로 파싱
- * 조문단위 XML이 없을 때 fallback으로 사용
  */
 function parseArticlesFromText(text) {
   if (!text) return []
 
   var articles = []
-  // "제1조", "제2조" 등으로 분리
+  // "제1조", "제2조", "제10조의2" 등으로 분리
   var parts = text.split(/(?=제\d+조)/)
 
   for (var i = 0; i < parts.length; i++) {
     var part = parts[i].trim()
     if (!part) continue
 
-    // 조문 번호와 제목 추출: "제1조(목적)" 또는 "제1조 목적"
-    var headerMatch = part.match(/^제(\d+)조(?:\(([^)]+)\)|\s+)?/)
+    // 조문 번호와 제목 추출
+    var headerMatch = part.match(/^제(\d+조(?:의\d+)?)\s*(?:\(([^)]+)\))?\s*/)
     if (!headerMatch) continue
 
-    var joNum = '제' + headerMatch[1] + '조'
+    var joNum = '제' + headerMatch[1]
     var joTitle = headerMatch[2] || ''
 
     // 나머지 내용
-    var bodyStart = part.indexOf(')') > -1 && part.indexOf(')') < 30
-      ? part.indexOf(')') + 1
-      : part.indexOf('조') + 1
-    var body = part.slice(bodyStart).trim()
+    var hdr = headerMatch[0]
+    var body = part.slice(hdr.length).trim()
 
     // 항 분리: ① ② ③ 등
     var hangParts = body.split(/(?=[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])/)
     var paragraphs = []
 
-    if (hangParts.length > 1 || (hangParts.length === 1 && hangParts[0].match(/^[①②③④⑤⑥⑦⑧⑨⑩]/))) {
-      // 항이 있는 경우
+    if (hangParts.length > 1
+      || (hangParts.length === 1
+        && hangParts[0].match(/^[①②③④⑤⑥⑦⑧⑨⑩]/))) {
       for (var h = 0; h < hangParts.length; h++) {
         var hangText = hangParts[h].trim()
         if (!hangText) continue
-        hangText = hangText.replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*/, '')
+        hangText = hangText.replace(
+          /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*/, ''
+        )
         var parsed = parseItemsFromText(hangText)
         paragraphs.push(parsed)
       }

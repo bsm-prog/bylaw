@@ -26,29 +26,46 @@ async function callClaude(systemPrompt, userPrompt, maxTokens) {
     ],
   }
 
-  try {
-    const res = await fetch(AI_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+  const MAX_RETRIES = 2
+  let lastErr = null
 
-    if (!res.ok) {
-      const errText = await res.text()
-      throw new Error('AI API 오류: ' + res.status + ' ' + errText)
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log('[aiApi] 재시도 ' + attempt + '/' + MAX_RETRIES)
+        await new Promise(function(r) { setTimeout(r, 1500 * attempt) })
+      }
+
+      const res = await fetch(AI_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        lastErr = new Error('AI API 오류: ' + res.status + ' ' + errText)
+        console.warn('[aiApi] 시도 ' + (attempt + 1) + ' 실패:', res.status)
+        if (res.status === 400) throw lastErr
+        continue
+      }
+
+      const data = await res.json()
+      const text = data.content
+        ?.filter(item => item.type === 'text')
+        ?.map(item => item.text)
+        ?.join('\n') || ''
+
+      return text
+    } catch (err) {
+      lastErr = err
+      console.warn('[aiApi] 시도 ' + (attempt + 1) + ' 오류:', err.message)
+      if (err.message.indexOf('400') >= 0) break
     }
-
-    const data = await res.json()
-    const text = data.content
-      ?.filter(item => item.type === 'text')
-      ?.map(item => item.text)
-      ?.join('\n') || ''
-
-    return text
-  } catch (err) {
-    console.error('Claude API 호출 실패:', err)
-    throw err
   }
+
+  console.error('[aiApi] Claude API 최종 실패:', lastErr)
+  throw lastErr
 }
 
 /* ─── 공개 AI 함수들 ─── */

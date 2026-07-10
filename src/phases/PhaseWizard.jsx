@@ -141,6 +141,7 @@ export default function PhaseWizard({ onStartWork }) {
         {currentPhase === 3 && (
           <Phase3Decision
             searchData={searchData}
+            selectedRefs={selectedRefs}
             onStart={handleStartWork}
             onBack={() => setCurrentPhase(2)}
             onExportReport={handleExportReport}

@@ -374,3 +374,126 @@ function BillPreview({ data, isAmendment }) {
     </div>
   )
 }
+
+
+/* ─── 제안설명서 미리보기 ─── */
+function ProposalPreview({ data }) {
+  var title = data.title || '○○'
+  return (
+    <div className="preview-document">
+      <p className="preview-doc-title">제 안 설 명 서</p>
+      <div className="preview-doc-divider" />
+
+      <p className="preview-doc-heading">1. 제안 경위</p>
+      <p className="preview-doc-body">
+        {'경기도 ' + title + '에 관한 조례안을 ' +
+          (data.type === '제정' ? '제정' : '개정') +
+          '하기 위하여 조례안을 마련하였기에 의회에 제출합니다.'}
+      </p>
+
+      <p className="preview-doc-heading">2. 제안이유</p>
+      <p className="preview-doc-body">
+        {data.reason || '(제안이유가 작성되지 않았습니다)'}
+      </p>
+
+      <p className="preview-doc-heading">3. 주요내용</p>
+      <p className="preview-doc-body" style={{whiteSpace: 'pre-wrap'}}>
+        {data.mainContent || '(주요내용이 작성되지 않았습니다)'}
+      </p>
+
+      <p className="preview-doc-heading">4. 참고사항</p>
+      <p className="preview-doc-body">
+        {'가. 관계법규: 「지방자치법」 제28조'}
+      </p>
+
+      {data.articles && data.articles.length > 0 && (
+        <>
+          <p className="preview-doc-heading">5. 조문별 설명</p>
+          {data.articles.map(function(art) {
+            var artTitle = art.title
+              ? '(' + art.title + ')' : ''
+            var firstPara = (art.paragraphs && art.paragraphs[0])
+              ? art.paragraphs[0].content : ''
+            return (
+              <p key={art.id || art.number}
+                className="preview-doc-body">
+                {'제' + art.number + '조' + artTitle + ': ' +
+                  (firstPara
+                    ? firstPara.slice(0, 80) + (firstPara.length > 80 ? '...' : '')
+                    : '(내용 없음)')}
+              </p>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ─── 입법예고문 미리보기 ─── */
+function NoticePreview({ data }) {
+  var title = data.title || '○○'
+  var today = new Date()
+  var yyyy = today.getFullYear()
+  var mm = String(today.getMonth() + 1).padStart(2, '0')
+  var dd = String(today.getDate()).padStart(2, '0')
+  var todayStr = yyyy + '년 ' + mm + '월 ' + dd + '일'
+
+  var endDate = new Date(today)
+  endDate.setDate(endDate.getDate() + 20)
+  var eY = endDate.getFullYear()
+  var eM = String(endDate.getMonth() + 1).padStart(2, '0')
+  var eD = String(endDate.getDate()).padStart(2, '0')
+  var endStr = eY + '년 ' + eM + '월 ' + eD + '일'
+
+  return (
+    <div className="preview-document">
+      <p className="preview-doc-title">입 법 예 고</p>
+      <div className="preview-doc-divider" />
+
+      <p className="preview-doc-body" style={{textAlign: 'center', fontWeight: 'bold'}}>
+        {'경기도 ' + title + '에 관한 조례안 입법예고'}
+      </p>
+
+      <p className="preview-doc-body">
+        {'「지방자치법」 제28조 및 「경기도 자치법규 입법예고에 관한 조례」에 따라 ' +
+          '다음과 같이 조례안을 입법예고합니다.'}
+      </p>
+
+      <p className="preview-doc-heading">1. 예고 기간</p>
+      <p className="preview-doc-body">
+        {todayStr + ' ~ ' + endStr + ' (20일간)'}
+      </p>
+
+      <p className="preview-doc-heading">2. 조례안 명칭</p>
+      <p className="preview-doc-body">
+        {'경기도 ' + title +
+          (data.type === '제정'
+            ? ' 조례안'
+            : data.type === '일부개정'
+              ? ' 조례 일부개정조례안'
+              : ' 조례 전부개정조례안')}
+      </p>
+
+      <p className="preview-doc-heading">3. 제안이유</p>
+      <p className="preview-doc-body">
+        {data.reason || '(제안이유가 작성되지 않았습니다)'}
+      </p>
+
+      <p className="preview-doc-heading">4. 주요내용</p>
+      <p className="preview-doc-body" style={{whiteSpace: 'pre-wrap'}}>
+        {data.mainContent || '(주요내용이 작성되지 않았습니다)'}
+      </p>
+
+      <p className="preview-doc-heading">5. 의견 제출</p>
+      <p className="preview-doc-body">
+        {'이 조례안에 대하여 의견이 있는 기관·단체 또는 개인은 위 예고기간 내에 ' +
+          '다음 사항을 기재하여 경기도의회에 제출하여 주시기 바랍니다.'}
+      </p>
+      <p className="preview-doc-body" style={{paddingLeft: 16}}>
+        {'가. 예고 사항에 대한 찬반 의견 및 그 사유\n' +
+          '나. 성명(법인·단체의 경우 명칭), 주소 및 연락처'}
+      </p>
+    </div>
+  )
+}

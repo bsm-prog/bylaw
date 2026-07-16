@@ -93,7 +93,7 @@ export default function PhaseWizard({ onStartWork }) {
         <div className="phase-header-inner">
           <div className="phase-header-title">
             <h1>조례 작성 도우미</h1>
-            <p>경기도의회 조례 제·개정 지원 도구</p> <p>전국의 조례현황을 조회하고, 제정.개정할 조례 초안작성을 돕는 도구입니다.</p>
+            <p>경기도의회 조례 제·개정 지원 도구</p> 
           </div>
         </div>
       </header>
